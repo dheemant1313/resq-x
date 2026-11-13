@@ -1,40 +1,26 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { 
-  LifeBuoy, 
-  Radio, 
-  UserCheck, 
-  LogIn, 
-  UserPlus, 
   Volume2, 
   VolumeX, 
   Waves, 
-  ArrowRight, 
   RotateCcw, 
-  CheckCircle2, 
-  AlertCircle,
-  Eye,
-  EyeOff,
-  LogOut,
   FastForward
 } from 'lucide-react';
 import { startStorm, type Storm } from '../../lib/ambience';
 import { sfx } from '../../lib/sound';
 import { ApiClient } from '../../services/api';
+import type { RoleType, AuthStage, AuthResponse } from './types';
+import RoleSelectionCards from './RoleSelectionCards';
+import LoginForm from './LoginForm';
+import NDRFRegisterForm from './NDRFRegisterForm';
+import ForgotPasswordModal from './ForgotPasswordModal';
+import OperatorRestrictedModal from './OperatorRestrictedModal';
+import AuthenticatedSessionCard from './AuthenticatedSessionCard';
 
 interface LoginViewProps {
   onReplayCinematic?: () => void;
   onReturnToHome: () => void;
-}
-
-type RoleType = 'RELIEF_CENTER' | 'OPERATOR' | 'ADMIN';
-
-interface AuthResponse {
-  access_token: string;
-  token_type: string;
-  role: RoleType;
-  username: string;
-  center_id: number | null;
 }
 
 // ----------------- PROCEDURAL CANVAS ENGINE CONSTANTS -----------------
@@ -223,20 +209,11 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
   const [caption, setCaption] = useState('Flash flood · raging current · a man is being swept away');
   const [ready, setReady] = useState(false);
 
-  // Form State
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [role, setRole] = useState<RoleType>('RELIEF_CENTER');
-  const [username, setUsername] = useState('coord_alpha');
-  const [password, setPassword] = useState('Relief@12345');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regCenterId, setRegCenterId] = useState(1);
-  const [showPassword, setShowPassword] = useState(false);
-
-  // Status & Auth
-  const [err, setErr] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Auth Gateway States (Phase 3)
+  const [authStage, setAuthStage] = useState<AuthStage>('role_selection');
+  const [selectedRole, setSelectedRole] = useState<RoleType>('RELIEF_CENTER');
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showOperatorLockedModal, setShowOperatorLockedModal] = useState(false);
   const [authData, setAuthData] = useState<AuthResponse | null>(null);
 
   // ----------------- CANVAS LIFECYCLE & RESCUE ANIMATION -----------------
@@ -896,7 +873,7 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
         sfx.accept();
         gsap.fromTo(
           card.current,
-          { autoAlpha: 0, scale: 0.2, filter: 'brightness(4)' },
+          { autoAlpha: 0, scale: 0.9, filter: 'brightness(3)' },
           {
             autoAlpha: 1,
             scale: 1,
@@ -948,90 +925,14 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
     startRef.current = performance.now();
     setReady(false);
     if (card.current) {
-      gsap.set(card.current, { autoAlpha: 0, scale: 0.2 });
-    }
-  };
-
-  // Select Role & auto-fill demo credentials
-  const pickRole = (r: RoleType) => {
-    setRole(r);
-    setErr(null);
-    setSuccessMsg(null);
-    if (r === 'RELIEF_CENTER') {
-      setUsername('coord_alpha');
-      setPassword('Relief@12345');
-    } else if (r === 'OPERATOR') {
-      setUsername('operator1');
-      setPassword('Operator@12345');
-    } else if (r === 'ADMIN') {
-      setUsername('admin');
-      setPassword('Admin@12345');
-    }
-  };
-
-  // Login Submit
-  const handleLoginSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setErr(null);
-    setSuccessMsg(null);
-
-    try {
-      const data = await ApiClient.post<AuthResponse>('/auth/login', {
-        username_or_email: username,
-        password: password,
-      });
-
-      ApiClient.setToken(data.access_token);
-      setAuthData(data);
-      sfx.done();
-      setSuccessMsg(`Authenticated as ${data.username} (${data.role}). Session active!`);
-    } catch (error: unknown) {
-      sfx.error();
-      setErr((error as Error).message || 'Invalid username or password.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Registration Submit (Relief Center)
-  const handleRegisterSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    if (password !== confirmPassword) {
-      setErr('Passwords do not match.');
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    setSuccessMsg(null);
-
-    try {
-      await ApiClient.post('/auth/register-relief-center', {
-        email: regEmail,
-        username: username,
-        password: password,
-        role: 'RELIEF_CENTER',
-        center_id: regCenterId || 1,
-      });
-
-      sfx.done();
-      setSuccessMsg('NDRF Relief Center account created successfully! You can now sign in.');
-      setMode('signin');
-    } catch (error: unknown) {
-      sfx.error();
-      setErr((error as Error).message || 'Registration failed.');
-    } finally {
-      setBusy(false);
+      gsap.set(card.current, { autoAlpha: 0, scale: 0.9 });
     }
   };
 
   const handleLogout = () => {
     ApiClient.setToken(null);
     setAuthData(null);
-    setSuccessMsg(null);
-    setErr(null);
+    setAuthStage('role_selection');
   };
 
   return (
@@ -1109,226 +1010,97 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
         </div>
       </div>
 
-      {/* ----------------- LOGIN CARD ON RIGHT END (ILLUMINATED BY TORCH) ----------------- */}
-      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-end px-4 sm:px-10 lg:px-16 overflow-y-auto pt-16 pb-16">
+      {/* ----------------- LOGIN & ROLE SELECTION GATEWAY (ILLUMINATED BY TORCH) ----------------- */}
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center sm:justify-end px-3 sm:px-6 lg:px-12 overflow-y-auto py-16">
         <div
           ref={card}
-          className="glass pointer-events-auto invisible w-full max-w-sm p-6 shadow-[0_0_60px_rgba(255,240,200,0.35)] border border-cyan-400/30 rounded-2xl"
+          className="pointer-events-auto invisible relative w-full max-w-2xl p-5 sm:p-7 rounded-2xl border border-cyan-400/40 bg-slate-950/85 backdrop-blur-2xl shadow-[0_0_60px_rgba(249,115,22,0.22)]"
           style={{ visibility: 'hidden' }}
         >
-          {authData ? (
-            /* Active Authenticated Session */
-            <div className="space-y-4 animate-fadeIn">
-              <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-700/80 text-center space-y-2">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
-                  <CheckCircle2 size={20} />
-                </div>
-                <h3 className="text-base font-bold text-white font-mono">Active Session Initialized</h3>
-                <div className="text-xs font-mono text-slate-300 space-y-1">
-                  <p>User: <strong className="text-white">{authData.username}</strong></p>
-                  <p>Role: <strong className="text-emerald-400">{authData.role}</strong></p>
-                  {authData.center_id && <p>Assigned Center: <strong className="text-cyan-400">Camp #{authData.center_id}</strong></p>}
-                  <p className="text-[10px] text-slate-500 truncate pt-1">JWT: {authData.access_token.slice(0, 28)}...</p>
-                </div>
-              </div>
+          {/* Subtle Orange Ambient Backlighting */}
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top_right,rgba(249,115,22,0.14),transparent_65%)]" />
 
-              <div className="flex gap-2">
-                <button onClick={handleLogout} className="btn flex-1 text-xs">
-                  <LogOut size={14} />
-                  <span>LOGOUT</span>
-                </button>
-                <button onClick={onReturnToHome} className="btn btn-amber flex-1 text-xs">
-                  <span>OVERVIEW</span>
-                  <ArrowRight size={14} />
-                </button>
+          <div className="relative z-10">
+            {/* Command Gateway Header with RESQ-X Logo */}
+            <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emergency-orange opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emergency-orange" />
+                </span>
+                <span className="text-lg font-black tracking-widest text-white font-mono flex items-center gap-1">
+                  <span>RESQ</span>
+                  <span className="text-emergency-orange">-X</span>
+                </span>
+                <span className="hidden sm:inline-block text-[10px] font-mono tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  DISASTER RELIEF PLATFORM
+                </span>
               </div>
+              <span className="text-[10px] font-mono text-cyan-300/80">
+                ACTIVE RADAR // LIVE
+              </span>
             </div>
-          ) : (
-            <>
-              {/* 3 Role Selection Radio Buttons */}
-              <div className="mb-3 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Sign in as">
-                {([
-                  ['RELIEF_CENTER', 'NDRF Team', 'Request relief', <LifeBuoy key="a" size={15} />],
-                  ['OPERATOR', 'Operator', 'Triage & dispatch', <Radio key="b" size={15} />],
-                  ['ADMIN', 'Sys Admin', 'Administer', <UserCheck key="c" size={15} />],
-                ] as const).map(([r, title, sub, icon]) => (
-                  <button
-                    key={r}
-                    type="button"
-                    role="radio"
-                    aria-checked={role === r}
-                    onClick={() => pickRole(r)}
-                    className={`rounded-xl border p-2 text-left transition-all ${
-                      role === r
-                        ? 'border-amber-300/80 bg-amber-300/15 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.25)]'
-                        : 'border-slate-600/60 text-slate-400 hover:border-cyan-400/40'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-bold font-mono">
-                      {icon}
-                      {title}
-                    </span>
-                    <span className="mt-0.5 block text-[0.62rem] leading-tight opacity-75 truncate">
-                      {sub}
-                    </span>
-                  </button>
-                ))}
-              </div>
 
-              {/* Sign In vs Register Toggle */}
-              <div className="mb-3 flex rounded-xl border border-cyan-400/20 p-1" role="tablist">
-                <button
-                  role="tab"
-                  aria-selected={mode === 'signin'}
-                  className={`btn flex-1 !border-0 text-xs ${mode === 'signin' ? '' : '!bg-transparent !text-slate-400'}`}
-                  onClick={() => { setMode('signin'); setErr(null); }}
-                  type="button"
-                >
-                  <LogIn size={13} /> Sign In
-                </button>
-                {role === 'RELIEF_CENTER' && (
-                  <button
-                    role="tab"
-                    aria-selected={mode === 'signup'}
-                    className={`btn flex-1 !border-0 text-xs ${mode === 'signup' ? '' : '!bg-transparent !text-slate-400'}`}
-                    onClick={() => { setMode('signup'); setErr(null); }}
-                    type="button"
-                  >
-                    <UserPlus size={13} /> Register Camp
-                  </button>
-                )}
-              </div>
-
-              <div className="mb-3">
-                <h1 className="text-sm font-bold tracking-wide text-white font-mono">
-                  {role === 'RELIEF_CENTER' ? 'NDRF / Relief Camp' : role === 'OPERATOR' ? 'Central Logistics Operator' : 'System Administrator'}{' '}
-                  {mode === 'signin' ? 'Sign In' : 'Registration'}
-                </h1>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {role === 'RELIEF_CENTER'
-                    ? 'Submit frontline population requirements and track dispatches.'
-                    : role === 'OPERATOR'
-                    ? 'Manage warehouse inventory, pack vehicles with 0/1 Knapsack, and route.'
-                    : 'System administration, operator account provisioning, and audit logs.'}
-                </p>
-              </div>
-
-              {/* Status Notifications */}
-              {err && (
-                <div className="p-2.5 mb-3 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-start gap-1.5">
-                  <AlertCircle size={14} className="shrink-0 mt-0.5 text-rose-400" />
-                  <span>{err}</span>
-                </div>
-              )}
-              {successMsg && (
-                <div className="p-2.5 mb-3 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-start gap-1.5">
-                  <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-emerald-400" />
-                  <span>{successMsg}</span>
-                </div>
-              )}
-
-              {/* Auth Form */}
-              <form onSubmit={mode === 'signin' ? handleLoginSubmit : handleRegisterSubmit} className="space-y-3" noValidate>
-                {mode === 'signup' && (
-                  <div>
-                    <label className="label" htmlFor="lg-email">Official Email</label>
-                    <input
-                      id="lg-email"
-                      type="email"
-                      className="field text-xs font-mono"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="coordinator@ndrf-camp.gov.in"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="label" htmlFor="lg-user">Username</label>
-                  <input
-                    id="lg-user"
-                    className="field text-xs font-mono"
-                    autoComplete="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    maxLength={24}
-                    required
-                  />
-                </div>
-
-                {mode === 'signup' && (
-                  <div>
-                    <label className="label" htmlFor="lg-cid">Relief Center ID</label>
-                    <input
-                      id="lg-cid"
-                      type="number"
-                      min="1"
-                      className="field text-xs font-mono"
-                      value={regCenterId}
-                      onChange={(e) => setRegCenterId(parseInt(e.target.value) || 1)}
-                      required
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex justify-between items-center">
-                    <label className="label" htmlFor="lg-pw">Password</label>
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-white text-[10px] pb-1 flex items-center gap-1"
-                    >
-                      {showPassword ? <EyeOff size={11} /> : <Eye size={11} />}
-                      <span>{showPassword ? 'Hide' : 'Show'}</span>
-                    </button>
-                  </div>
-                  <input
-                    id="lg-pw"
-                    type={showPassword ? 'text' : 'password'}
-                    className="field text-xs font-mono"
-                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    maxLength={128}
-                    required
-                  />
-                </div>
-
-                {mode === 'signup' && (
-                  <div>
-                    <label className="label" htmlFor="lg-pw2">Confirm Password</label>
-                    <input
-                      id="lg-pw2"
-                      type={showPassword ? 'text' : 'password'}
-                      className="field text-xs font-mono"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      maxLength={128}
-                      required
-                    />
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="btn btn-amber w-full !py-2.5 font-mono text-xs !tracking-[0.12em]"
-                  disabled={busy}
-                >
-                  {busy ? 'AUTHENTICATING...' : mode === 'signin' ? 'SIGN IN & ENTER COMMAND' : 'CREATE CAMP & ENTER'}
-                </button>
-              </form>
-
-              <div className="mt-3 pt-2.5 border-t border-slate-700/60 text-[10px] leading-relaxed text-slate-400 font-mono flex items-center justify-between">
-                <span>Demo: <span className="text-amber-300">{username}</span> / <span className="text-slate-300">••••••••</span></span>
-                <span className="text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> API :8000</span>
-              </div>
-            </>
-          )}
+            {/* Stage Routing */}
+            {authStage === 'authenticated' && authData ? (
+              <AuthenticatedSessionCard
+                authData={authData}
+                onLogout={handleLogout}
+                onReturnToHome={onReturnToHome}
+              />
+            ) : authStage === 'register_ndrf' ? (
+              <NDRFRegisterForm
+                onBackToLogin={() => setAuthStage('login')}
+                onSuccess={() => {
+                  setAuthStage('login');
+                }}
+              />
+            ) : authStage === 'login' ? (
+              <LoginForm
+                role={selectedRole}
+                onBackToRoles={() => setAuthStage('role_selection')}
+                onSuccess={(data) => {
+                  setAuthData(data);
+                  setAuthStage('authenticated');
+                }}
+                onOpenForgot={() => setShowForgotModal(true)}
+                onOpenNDRFRegister={selectedRole === 'RELIEF_CENTER' ? () => setAuthStage('register_ndrf') : undefined}
+              />
+            ) : (
+              <RoleSelectionCards
+                onSelectRole={(r) => {
+                  setSelectedRole(r);
+                  setAuthStage('login');
+                }}
+                onOpenNDRFRegister={() => {
+                  setSelectedRole('RELIEF_CENTER');
+                  setAuthStage('register_ndrf');
+                }}
+                onOpenOperatorLocked={() => setShowOperatorLockedModal(true)}
+              />
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Security Modals */}
+      {showForgotModal && (
+        <ForgotPasswordModal
+          role={selectedRole}
+          onClose={() => setShowForgotModal(false)}
+        />
+      )}
+
+      {showOperatorLockedModal && (
+        <OperatorRestrictedModal
+          onClose={() => setShowOperatorLockedModal(false)}
+          onProceedToLogin={() => {
+            setShowOperatorLockedModal(false);
+            setSelectedRole('OPERATOR');
+            setAuthStage('login');
+          }}
+        />
+      )}
     </div>
   );
 }
