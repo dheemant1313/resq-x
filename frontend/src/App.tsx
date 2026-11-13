@@ -9,11 +9,10 @@ import UserRolesSection from './components/UserRolesSection';
 import TechnologySection from './components/TechnologySection';
 import AboutSection from './components/AboutSection';
 import Footer from './components/Footer';
-import { CinematicRescueSequence } from './components/cinematic/CinematicRescueSequence';
 import { LoginView } from './components/auth/LoginView';
 import { useLenis } from './hooks/useLenis';
 
-type AppViewMode = 'landing' | 'cinematic' | 'login';
+type AppViewMode = 'landing' | 'login';
 
 export function App() {
   // Initialize Lenis smooth scroll engine for landing page
@@ -22,53 +21,32 @@ export function App() {
   // Active view state
   const [viewMode, setViewMode] = useState<AppViewMode>('landing');
 
-  // Triggered when user clicks "Launch RESQ-X" on landing page
-  const handleLaunchCinematic = () => {
-    setViewMode('cinematic');
-  };
-
-  // Triggered when 3D cinematic finishes or user clicks "Skip Intro"
-  const handleCinematicComplete = () => {
+  // Launch login experience with the complete realistic rescue simulation
+  const handleLaunchLogin = () => {
     setViewMode('login');
   };
 
-  // Triggered when user replays cinematic from login page
-  const handleReplayCinematic = () => {
-    setViewMode('cinematic');
-  };
-
-  // Triggered when user returns to landing page
+  // Return to landing page
   const handleReturnToLanding = () => {
     setViewMode('landing');
   };
 
   return (
     <>
-      {/* ----------------- VIEW 1: 3D CINEMATIC RESCUE SEQUENCE ----------------- */}
-      {viewMode === 'cinematic' && (
-        <CinematicRescueSequence
-          onComplete={handleCinematicComplete}
-          onCancel={handleReturnToLanding}
-        />
-      )}
-
-      {/* ----------------- VIEW 2: RESQ-X LOGIN & RBAC INTERFACE ----------------- */}
+      {/* ----------------- VIEW 1: FULL REALISTIC RESCUE LOGIN EXPERIENCE ----------------- */}
       {viewMode === 'login' && (
-        <LoginView
-          onReplayCinematic={handleReplayCinematic}
-          onReturnToHome={handleReturnToLanding}
-        />
+        <LoginView onReturnToHome={handleReturnToLanding} />
       )}
 
-      {/* ----------------- VIEW 3: FULL PUBLIC LANDING PAGE ----------------- */}
+      {/* ----------------- VIEW 2: FULL PUBLIC LANDING PAGE ----------------- */}
       {viewMode === 'landing' && (
         <div className="min-h-screen bg-command-950 text-slate-100 flex flex-col selection:bg-emergency-orange selection:text-white font-sans antialiased relative">
           {/* SECTION 1 — Tactical Navbar with Live Status */}
-          <Navbar onLaunch={handleLaunchCinematic} />
+          <Navbar onLaunch={handleLaunchLogin} />
 
           <main className="flex-1 w-full">
             {/* SECTION 2 — Hero with 3D Emergency Response Environment */}
-            <HeroSection onLaunch={handleLaunchCinematic} />
+            <HeroSection onLaunch={handleLaunchLogin} />
 
             {/* SECTION 3 — Problem & Algorithmic Solution Breakdown */}
             <ProblemSolutionSection />

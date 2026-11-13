@@ -1,29 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import gsap from 'gsap';
 import { 
-  ShieldAlert, 
-  Building2, 
-  Truck, 
+  LifeBuoy, 
+  Radio, 
   UserCheck, 
-  KeyRound, 
-  User, 
+  LogIn, 
+  UserPlus, 
+  Volume2, 
+  VolumeX, 
+  Waves, 
   ArrowRight, 
   RotateCcw, 
   CheckCircle2, 
-  AlertCircle, 
-  Eye, 
-  EyeOff, 
-  Terminal,
+  AlertCircle,
+  Eye,
+  EyeOff,
   LogOut,
-  Volume2,
-  VolumeX,
-  Compass
+  FastForward
 } from 'lucide-react';
+import { startStorm, type Storm } from '../../lib/ambience';
+import { sfx } from '../../lib/sound';
 import { ApiClient } from '../../services/api';
-import { RealisticRescueLoginCanvas } from './RealisticRescueLoginCanvas';
-import { rescueAudio } from '../../audio/rescueAudio';
 
 interface LoginViewProps {
-  onReplayCinematic: () => void;
+  onReplayCinematic?: () => void;
   onReturnToHome: () => void;
 }
 
@@ -37,179 +37,993 @@ interface AuthResponse {
   center_id: number | null;
 }
 
+// ----------------- PROCEDURAL CANVAS ENGINE CONSTANTS -----------------
+const REVEAL = 14.6; // Login card emerges when torch beam strikes
+const END = 25;
+const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t: number, a: number, b: number) => clamp((t - a) / (b - a));
+const ease = (x: number) => x * x * (3 - 2 * x);
+const mix = (a: number, b: number, x: number) => a + (b - a) * x;
+
+function rng(seed: number) {
+  let s = seed;
+  return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+}
+
+const mk = (w: number, h: number) => {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, w);
+  c.height = Math.max(1, h);
+  return c;
+};
+
+function buildScene(W: number, H: number) {
+  const wy = Math.round(H * 0.55);
+  const r = rng(11);
+  const sky = mk(W * 2, wy + 4);
+  let c = sky.getContext('2d')!;
+  const g = c.createLinearGradient(0, 0, 0, wy);
+  g.addColorStop(0, '#1b2125');
+  g.addColorStop(0.55, '#454e51');
+  g.addColorStop(1, '#8a897e');
+  c.fillStyle = g;
+  c.fillRect(0, 0, W * 2, wy + 4);
+
+  for (let i = 0; i < 90; i++) {
+    const x = r() * W * 2,
+      y = r() * wy * 0.8,
+      s = 80 + r() * 260,
+      dark = r() < 0.65;
+    const rg = c.createRadialGradient(0, 0, 0, 0, 0, s);
+    rg.addColorStop(0, dark ? 'rgba(34,40,44,.24)' : 'rgba(205,205,195,.16)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.save();
+    c.translate(x, y);
+    c.scale(1, 0.32);
+    c.fillStyle = rg;
+    c.beginPath();
+    c.arc(0, 0, s, 0, 7);
+    c.fill();
+    c.restore();
+  }
+
+  const vil = mk(W, wy + 60);
+  c = vil.getContext('2d')!;
+  const trees = (base: number, h: number, col: string, seed: number) => {
+    const q = rng(seed);
+    c.fillStyle = col;
+    c.beginPath();
+    c.moveTo(0, base + 60);
+    for (let x = 0; x <= W; x += 12) {
+      c.lineTo(x, base - h * (0.4 + 0.6 * q()) - Math.sin(x * 0.01 + seed) * h * 0.25);
+    }
+    c.lineTo(W, base + 60);
+    c.closePath();
+    c.fill();
+  };
+
+  const sc = H / 800;
+  trees(wy - 8, H * 0.1, 'rgba(84,98,90,.85)', 3);
+  trees(wy + 2, H * 0.07, 'rgba(44,56,46,.96)', 5);
+
+  const houses: [number, number, number, string, number][] = [
+    [0.07, 150, 120, '#a79c88', 0],
+    [0.2, 120, 92, '#8a9aa3', 1],
+    [0.34, 170, 130, '#b08c72', 0],
+    [0.64, 140, 105, '#98a08a', 1],
+    [0.77, 180, 140, '#a9a396', 0],
+    [0.92, 120, 96, '#9b7f6e', 1],
+  ];
+
+  for (const [fx, w0, h0, col, flat] of houses) {
+    const x = fx * W,
+      w = w0 * sc,
+      h = h0 * sc,
+      base = wy + h * 0.45,
+      side = w * 0.22;
+    c.fillStyle = col;
+    c.fillRect(x - w / 2, base - h, w, h);
+    c.fillStyle = 'rgba(0,0,0,.38)';
+    c.beginPath();
+    c.moveTo(x + w / 2, base - h);
+    c.lineTo(x + w / 2 + side, base - h + 10 * sc);
+    c.lineTo(x + w / 2 + side, base + 10);
+    c.lineTo(x + w / 2, base);
+    c.fill();
+
+    if (flat) {
+      c.fillStyle = '#6f6a62';
+      c.fillRect(x - w / 2 - 4, base - h - 9 * sc, w + side + 4, 9 * sc);
+      c.fillStyle = '#2d3a40';
+      c.fillRect(x - w * 0.3, base - h - 26 * sc, 22 * sc, 17 * sc);
+    } else {
+      const rg = c.createLinearGradient(0, base - h - 38 * sc, 0, base - h);
+      rg.addColorStop(0, '#8a7a68');
+      rg.addColorStop(1, '#4e4338');
+      c.fillStyle = rg;
+      c.beginPath();
+      c.moveTo(x - w / 2 - 8, base - h);
+      c.lineTo(x - w * 0.18, base - h - 38 * sc);
+      c.lineTo(x + w * 0.18 + side, base - h - 38 * sc);
+      c.lineTo(x + w / 2 + side + 8, base - h + 8 * sc);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = 'rgba(0,0,0,.25)';
+      c.lineWidth = 1;
+      for (let i = 1; i < 7; i++) {
+        c.beginPath();
+        c.moveTo(x - w / 2 + i * w / 7, base - h);
+        c.lineTo(x - w * 0.18 + i * (w * 0.36 + side) / 7, base - h - 38 * sc);
+        c.stroke();
+      }
+    }
+
+    for (const wx of [-0.28, 0.14]) {
+      c.fillStyle = '#1a2227';
+      c.fillRect(x + wx * w, base - h * 0.72, w * 0.16, h * 0.22);
+      c.strokeStyle = 'rgba(230,230,220,.45)';
+      c.strokeRect(x + wx * w, base - h * 0.72, w * 0.16, h * 0.22);
+    }
+
+    c.fillStyle = '#3b2f26';
+    c.fillRect(x - w * 0.06, base - h * 0.42, w * 0.14, h * 0.42);
+    const st = c.createLinearGradient(0, base - h * 0.3, 0, base + 10);
+    st.addColorStop(0, 'rgba(80,62,42,0)');
+    st.addColorStop(1, 'rgba(80,62,42,.7)');
+    c.fillStyle = st;
+    c.fillRect(x - w / 2, base - h * 0.3, w + side, h * 0.3 + 10);
+  }
+
+  for (const fx of [0.14, 0.5, 0.86]) {
+    const x = fx * W,
+      b = wy + 8,
+      t = 150 * sc;
+    c.strokeStyle = '#4a3b2c';
+    c.lineWidth = 6 * sc;
+    c.beginPath();
+    c.moveTo(x, b);
+    c.quadraticCurveTo(x + 14 * sc, b - t / 2, x + 6 * sc, b - t);
+    c.stroke();
+    c.strokeStyle = '#2a3b26';
+    c.lineWidth = 3;
+    for (let i = 0; i < 9; i++) {
+      const an = (i / 9) * Math.PI * 2;
+      c.beginPath();
+      c.moveTo(x + 6 * sc, b - t);
+      c.quadraticCurveTo(
+        x + 6 * sc + Math.cos(an) * 40 * sc,
+        b - t - 30 * sc,
+        x + 6 * sc + Math.cos(an) * 70 * sc,
+        b - t + Math.abs(Math.sin(an)) * 40 * sc
+      );
+      c.stroke();
+    }
+  }
+
+  const hz = c.createLinearGradient(0, wy - H * 0.2, 0, wy + 20);
+  hz.addColorStop(0, 'rgba(170,170,160,0)');
+  hz.addColorStop(1, 'rgba(170,170,160,.28)');
+  c.fillStyle = hz;
+  c.fillRect(0, wy - H * 0.2, W, H * 0.2 + 20);
+
+  return { wy, sky, vil };
+}
+
+type SceneType = ReturnType<typeof buildScene>;
+
 export function LoginView({ onReturnToHome }: LoginViewProps) {
-  // Choreography State for 3D Background
-  const [torchOn, setTorchOn] = useState<boolean>(false);
-  const [torchIntensity, setTorchIntensity] = useState<number>(0);
-  const [heloPhase, setHeloPhase] = useState<'approaching' | 'hovering' | 'leaving'>('approaching');
-  const [heloProgress, setHeloProgress] = useState<number>(0);
-  const [loginCardVisible, setLoginCardVisible] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [choreographyStep, setChoreographyStep] = useState<string>('HELICOPTER INBOUND OVER WATER');
+  const root = useRef<HTMLDivElement>(null);
+  const cv = useRef<HTMLCanvasElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const startRef = useRef(0);
+  const stormRef = useRef<Storm | null>(null);
 
-  const animationFrameRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [caption, setCaption] = useState('Flash flood · raging current · a man is being swept away');
+  const [ready, setReady] = useState(false);
 
-  // Role & Form State
-  const [selectedRole, setSelectedRole] = useState<RoleType>('RELIEF_CENTER');
-  const [isRegisterMode, setIsRegisterMode] = useState<boolean>(false);
-  const [usernameOrEmail, setUsernameOrEmail] = useState<string>('coord_alpha');
-  const [password, setPassword] = useState<string>('Relief@12345');
-  const [regEmail, setRegEmail] = useState<string>('');
-  const [regUsername, setRegUsername] = useState<string>('');
-  const [regPassword, setRegPassword] = useState<string>('');
-  const [regCenterId, setRegCenterId] = useState<number>(1);
-  const [showPassword, setShowPassword] = useState<boolean>(false);
+  // Form State
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [role, setRole] = useState<RoleType>('RELIEF_CENTER');
+  const [username, setUsername] = useState('coord_alpha');
+  const [password, setPassword] = useState('Relief@12345');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regCenterId, setRegCenterId] = useState(1);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Status & Error handling
-  const [loading, setLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Status & Auth
+  const [err, setErr] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [authData, setAuthData] = useState<AuthResponse | null>(null);
 
-  // ----------------- CHOREOGRAPHED RESCUE SEQUENCE -----------------
-  // 1. Helicopter approaches over flooded water (0s to 3s)
-  // 2. Survivor in water raises torch and turns it ON with click (3s)
-  // 3. Torch beam sweeps from left to right end, revealing login page (3.5s - 4.5s)
-  // 4. Helicopter hovers, then banks and leaves into deep background (5.5s onwards)
-  const startChoreography = () => {
-    startTimeRef.current = Date.now();
-    setTorchOn(false);
-    setTorchIntensity(0);
-    setHeloPhase('approaching');
-    setHeloProgress(0);
-    setLoginCardVisible(false);
-    setChoreographyStep('AIR-RESCUE HELO ON VECTOR');
-
-    rescueAudio.startAmbient();
-    rescueAudio.setHeloHover(0.85);
-
-    const tick = () => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-
-      if (elapsed < 3.2) {
-        // Approaching phase
-        setHeloPhase('approaching');
-        setHeloProgress(elapsed / 3.2);
-        setChoreographyStep('HELO SEARCHLIGHT SCANNING WATER');
-      } else if (elapsed >= 3.2 && elapsed < 5.0) {
-        // Person switches on torch!
-        setHeloPhase('hovering');
-        setTorchOn(true);
-        const beamProgress = Math.min(1.0, (elapsed - 3.2) / 1.2);
-        setTorchIntensity(beamProgress);
-        setChoreographyStep('HANDHELD BEACON SWEEPING TO RIGHT END');
-
-        // Reveal login card as beam reaches the right end
-        if (elapsed > 4.0 && !loginCardVisible) {
-          setLoginCardVisible(true);
-          setChoreographyStep('COMMAND LOGIN ILLUMINATED BY BEACON');
-        }
-      } else if (elapsed >= 5.0) {
-        // Helicopter departs into background behind the login panel!
-        setHeloPhase('leaving');
-        const leaveProgress = Math.min(1.0, (elapsed - 5.0) / 4.5);
-        setHeloProgress(leaveProgress);
-        setTorchOn(true);
-        setTorchIntensity(1.0);
-        setLoginCardVisible(true);
-        setChoreographyStep('HELO DEPARTING TO EXPEDITION BASE');
-      }
-
-      animationFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    animationFrameRef.current = requestAnimationFrame(tick);
-  };
-
+  // ----------------- CANVAS LIFECYCLE & RESCUE ANIMATION -----------------
   useEffect(() => {
-    startChoreography();
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      rescueAudio.stopAndCleanup();
+    const canvas = cv.current!;
+    const box = root.current!;
+    const ctx = canvas.getContext('2d')!;
+
+    let W = 0,
+      H = 0,
+      S: SceneType = buildScene(1, 1),
+      raf = 0,
+      last = 0,
+      revealed = false,
+      capIdx = -1,
+      prevFl = 0;
+    let rain: { x: number; y: number; l: number; v: number }[] = [];
+    let P = { x: 0, y: 0 };
+
+    startRef.current = performance.now() - (reduceMotion ? END * 1000 : 0);
+
+    const caps: [number, string][] = [
+      [0, 'Flash flood · raging current · a man is being swept away'],
+      [4, 'NDRF rescue helicopter on scene'],
+      [5.6, 'Lowering the rescue line…'],
+      [8.8, 'Man has the rope · lifting him clear of the water'],
+      [11.2, 'He signals with a torch from left to right…'],
+      [REVEAL, 'Signal received · sign in to enter the command center'],
+    ];
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      W = box.clientWidth;
+      H = box.clientHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      S = buildScene(W, H);
+      const r = rng(5);
+      rain = Array.from({ length: Math.round(W / 3) }, () => ({
+        x: r() * W,
+        y: r() * H,
+        l: 10 + r() * 16,
+        v: 700 + r() * 500,
+      }));
     };
-  }, []);
 
-  const handleToggleMute = () => {
-    const muted = rescueAudio.toggleMute();
-    setIsMuted(muted);
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(box);
+
+    const limb = (a: number[], b: number[], w: number, col: string) => {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.stroke();
+    };
+
+    const beam = (sx: number, sy: number, tx: number, ty: number, spread: number, al: number) => {
+      if (al <= 0) return;
+      const ang = Math.atan2(ty - sy, tx - sx),
+        len = Math.hypot(tx - sx, ty - sy);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(sx, sy);
+      ctx.rotate(ang);
+      const g = ctx.createLinearGradient(0, 0, len, 0);
+      g.addColorStop(0, `rgba(255,248,225,${0.6 * al})`);
+      g.addColorStop(1, `rgba(255,248,225,${0.16 * al})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(0, -3);
+      ctx.lineTo(len, -spread);
+      ctx.lineTo(len, spread);
+      ctx.lineTo(0, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      const rg = ctx.createRadialGradient(tx, ty, 0, tx, ty, spread * 1.5);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      rg.addColorStop(0, `rgba(255,250,235,${0.55 * al})`);
+      rg.addColorStop(1, 'rgba(255,250,235,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(tx, ty, spread * 1.5, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const heli = (x: number, y: number, k: number, tilt: number, a: number) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(tilt);
+      ctx.scale(k, k);
+
+      const body = ctx.createLinearGradient(0, -70, 0, 52);
+      body.addColorStop(0, '#6a755d');
+      body.addColorStop(0.5, '#3f4837');
+      body.addColorStop(1, '#1c211a');
+      ctx.fillStyle = body;
+      ctx.strokeStyle = '#11150f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(215, 12);
+      ctx.bezierCurveTo(215, -25, 180, -50, 125, -54);
+      ctx.lineTo(-70, -58);
+      ctx.lineTo(-150, -40);
+      ctx.lineTo(-262, -28);
+      ctx.lineTo(-278, -72);
+      ctx.lineTo(-250, -72);
+      ctx.lineTo(-236, -14);
+      ctx.lineTo(-130, 4);
+      ctx.lineTo(-80, 48);
+      ctx.lineTo(150, 50);
+      ctx.bezierCurveTo(195, 50, 215, 35, 215, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#36402f';
+      ctx.beginPath();
+      ctx.ellipse(20, -66, 62, 15, 0, 0, 7);
+      ctx.fill();
+
+      ctx.fillStyle = '#1a2830';
+      ctx.beginPath();
+      ctx.moveTo(205, 8);
+      ctx.bezierCurveTo(200, -22, 170, -42, 130, -46);
+      ctx.lineTo(118, 6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(190,220,235,.25)';
+      ctx.beginPath();
+      ctx.moveTo(190, -4);
+      ctx.lineTo(165, -34);
+      ctx.lineTo(140, -38);
+      ctx.lineTo(136, -4);
+      ctx.fill();
+
+      ctx.fillStyle = '#141b20';
+      for (let i = 0; i < 3; i++) ctx.fillRect(60 - i * 42, -38, 24, 20);
+      ctx.strokeStyle = 'rgba(0,0,0,.45)';
+      ctx.strokeRect(-30, -4, 58, 50);
+      ctx.fillStyle = '#ff5722';
+      ctx.fillRect(-80, 33, 295, 5);
+
+      // High-Visibility Labels
+      ctx.fillStyle = '#f2f2ea';
+      ctx.font = '900 40px Arial Black, Arial, sans-serif';
+      ctx.fillText('NDRF', 40, 26);
+      ctx.save();
+      ctx.rotate(-0.07);
+      ctx.font = '900 30px Arial Black, Arial, sans-serif';
+      ctx.fillText('NDRF', -225, -8);
+      ctx.restore();
+
+      // Mast & Landing Skids
+      ctx.fillStyle = '#d6d6cc';
+      ctx.fillRect(-4, -92, 8, 30);
+      ctx.strokeStyle = '#0e110d';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(110, 50);
+      ctx.lineTo(112, 62);
+      ctx.moveTo(-30, 50);
+      ctx.lineTo(-30, 62);
+      ctx.stroke();
+      ctx.fillStyle = '#0e110d';
+      ctx.beginPath();
+      ctx.arc(112, 66, 9, 0, 7);
+      ctx.arc(-30, 66, 9, 0, 7);
+      ctx.fill();
+
+      // Tail Strobe Flasher
+      ctx.fillStyle = '#ef4444';
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(a * 6);
+      ctx.beginPath();
+      ctx.arc(-276, -74, 3, 0, 7);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Spinning Rotor Blur & Blades
+      ctx.fillStyle = 'rgba(15,18,14,.3)';
+      ctx.beginPath();
+      ctx.ellipse(0, -90, 310, 7, 0, 0, 7);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15,18,14,.35)';
+      ctx.lineWidth = 7;
+      for (let i = 0; i < 5; i++) {
+        const ca = Math.cos(a * 55 + i * 1.2566) * 310;
+        ctx.beginPath();
+        ctx.moveTo(0, -90);
+        ctx.lineTo(ca, -90 + ca * 0.012);
+        ctx.stroke();
+      }
+
+      // Spinning Tail Rotor
+      ctx.fillStyle = 'rgba(20,20,18,.35)';
+      ctx.beginPath();
+      ctx.ellipse(-272, -50, 5, 28 * Math.abs(Math.cos(a * 40)) + 4, 0, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const man = (
+      hx: number,
+      hy: number,
+      s: number,
+      a: number,
+      wyM: number,
+      hands: number[][],
+      flail: boolean
+    ) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, wyM + Math.sin(a * 3) * 1.5);
+      ctx.clip();
+      const shirt = '#434e58',
+        pants = '#2a303a',
+        hip = [hx, hy + 70 * s];
+      const sw = Math.sin(a * 2.2);
+      const knee = flail ? [hx, hy + 100 * s] : [hx + sw * 6 * s, hy + 98 * s];
+      const foot = flail ? [hx, hy + 130 * s] : [hx + Math.sin(a * 2.2 + 1) * 12 * s, hy + 128 * s];
+      limb(hip, knee, 15 * s, pants);
+      limb(knee, foot, 13 * s, pants);
+      limb([hx - 6 * s, hy + 24 * s], hip, 34 * s, shirt);
+      const sh = [
+        [hx - 17 * s, hy + 22 * s],
+        [hx + 17 * s, hy + 22 * s],
+      ];
+      hands.forEach((h, i) => {
+        const el = [(sh[i][0] + h[0]) / 2 + (i ? 9 : -9) * s, (sh[i][1] + h[1]) / 2 + 6 * s];
+        limb(sh[i], el, 11 * s, shirt);
+        limb(el, h, 9 * s, '#7a553d');
+        ctx.fillStyle = '#8a6249';
+        ctx.beginPath();
+        ctx.arc(h[0], h[1], 5.5 * s, 0, 7);
+        ctx.fill();
+      });
+      limb([hx, hy + 10 * s], [hx, hy + 22 * s], 9 * s, '#7a553d');
+      const sg = ctx.createRadialGradient(hx - 4 * s, hy - 5 * s, 1, hx, hy, 15 * s);
+      sg.addColorStop(0, '#b78a68');
+      sg.addColorStop(1, '#5e3d2a');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.ellipse(hx, hy, 10.5 * s, 13 * s, 0, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = '#0f0c0b';
+      ctx.beginPath();
+      ctx.ellipse(hx, hy - 5 * s, 11.5 * s, 9.5 * s, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(hx - 11.5 * s, hy - 6 * s, 3 * s, 9 * s);
+      if (flail) {
+        ctx.fillStyle = '#2a1410';
+        ctx.beginPath();
+        ctx.ellipse(hx + s, hy + 6 * s, 3 * s, 2.4 * s, 0, 0, 7);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#1c1210';
+      ctx.fillRect(hx - 5 * s, hy - 1 * s, 2.5 * s, 1.6 * s);
+      ctx.fillRect(hx + 3 * s, hy - 1 * s, 2.5 * s, 1.6 * s);
+      ctx.restore();
+    };
+
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+      last = now;
+      const a = now / 1000;
+      const t = reduceMotion ? END : (now - startRef.current) / 1000;
+      const wy = S.wy,
+        k = clamp(W / 1500, 0.5, 1.1),
+        s = k * 1.4,
+        wyM = wy + H * 0.1,
+        mx = W * 0.2;
+
+      // 1. Sky + Flooded Village
+      ctx.drawImage(S.sky, -W * 0.5 * (1 + Math.sin(a * 0.03)), 0);
+      ctx.drawImage(S.vil, 0, 0);
+
+      // 2. Surging Flood Water
+      const wg = ctx.createLinearGradient(0, wy, 0, H);
+      wg.addColorStop(0, '#6e5d44');
+      wg.addColorStop(0.35, '#4d3f2d');
+      wg.addColorStop(1, '#1d160e');
+      ctx.fillStyle = wg;
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 10) {
+        ctx.lineTo(x, wy + Math.sin(x * 0.02 + a * 3) * 4 + Math.sin(x * 0.051 - a * 4.5) * 2.5);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Rippling Water Reflection
+      for (let y = 0; y < Math.min(H - wy, 260); y += 3) {
+        ctx.globalAlpha = 0.34 * (1 - y / 260);
+        ctx.drawImage(
+          S.vil,
+          0,
+          wy - y - 3,
+          W,
+          3,
+          Math.sin(y * 0.16 + a * 4) * (4 + y * 0.07),
+          wy + y + 4,
+          W,
+          3
+        );
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(70,55,36,.35)';
+      ctx.fillRect(0, wy + 10, W, 40);
+
+      // 4. Raging Flood Current Crests & Foam
+      for (let r = 0; r < 14; r++) {
+        const u = r / 13,
+          y = wy + 16 + Math.pow(u, 1.6) * (H - wy - 16),
+          amp = 2 + u * 14,
+          wl = 60 + u * 220,
+          sp = 60 + u * 260;
+        ctx.strokeStyle = `rgba(235,225,200,${0.1 + 0.22 * u})`;
+        ctx.lineWidth = 1 + u * 3;
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 14) {
+          const yy = y + Math.sin(((x + a * sp) / wl) * 6.283 + r) * amp;
+          if (x) ctx.lineTo(x, yy);
+          else ctx.moveTo(x, yy);
+        }
+        ctx.stroke();
+      }
+
+      // Foam streaks
+      for (let i = 0; i < 160; i++) {
+        const u = (i * 0.6180339) % 1,
+          y = wy + 18 + u * u * (H - wy - 18),
+          len = 10 + u * 70;
+        const x = (((i * 97 + a * (90 + u * 380)) % (W + 200)) + W + 200) % (W + 200) - 100;
+        ctx.strokeStyle = `rgba(240,232,210,${0.12 + 0.35 * (((i * 7) % 10) / 10)})`;
+        ctx.lineWidth = 1 + u * 2.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + len, y + Math.sin(a * 5 + i) * 1.5);
+        ctx.stroke();
+      }
+
+      // Floating flood debris (wooden logs, barrels, pallets, tires)
+      for (let i = 0; i < 8; i++) {
+        const u = 0.12 + ((i * 0.11) % 0.85),
+          sz = k * (16 + u * 56),
+          type = i % 4;
+        const x = (((i * 271 + a * (70 + u * 240)) % (W + 400)) + W + 400) % (W + 400) - 200,
+          y = wy + 30 + u * (H - wy - 60) + Math.sin(a * 2 + i) * (3 + u * 8);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(a * 1.3 + i) * 0.12);
+        ctx.fillStyle = 'rgba(240,232,210,.35)';
+        ctx.beginPath();
+        ctx.ellipse(-sz * 1.1, sz * 0.12, sz * 0.9, sz * 0.12, 0, 0, 7);
+        ctx.fill();
+        if (type === 0) {
+          ctx.fillStyle = '#3b2c1e';
+          ctx.fillRect(-sz, -sz * 0.13, sz * 2, sz * 0.27);
+          ctx.fillStyle = 'rgba(255,255,255,.12)';
+          ctx.fillRect(-sz, -sz * 0.13, sz * 2, sz * 0.05);
+        } else if (type === 1) {
+          ctx.fillStyle = '#8a9093';
+          ctx.fillRect(-sz, -sz * 0.08, sz * 1.8, sz * 0.2);
+          ctx.strokeStyle = 'rgba(0,0,0,.3)';
+          for (let q = 1; q < 8; q++) {
+            ctx.beginPath();
+            ctx.moveTo(-sz + q * sz * 0.22, -sz * 0.08);
+            ctx.lineTo(-sz + q * sz * 0.22, sz * 0.12);
+            ctx.stroke();
+          }
+        } else if (type === 2) {
+          ctx.strokeStyle = '#141414';
+          ctx.lineWidth = sz * 0.28;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, sz * 0.5, sz * 0.2, 0, 0, 7);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = '#4a3825';
+          ctx.lineWidth = sz * 0.14;
+          ctx.beginPath();
+          ctx.moveTo(-sz, 0);
+          ctx.lineTo(sz, -sz * 0.1);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // 5. Calculate Login Card Target Point P (on Right Side of Viewport)
+      if (card.current && box) {
+        const c = card.current.getBoundingClientRect(),
+          b = box.getBoundingClientRect();
+        P = {
+          x: c.left - b.left + c.width / 2,
+          y: c.top - b.top + c.height / 2,
+        };
+      } else {
+        P = { x: W * 0.72, y: H * 0.48 };
+      }
+
+      // 6. Helicopter Motion (Approaches -> Hovers -> Leaves behind card)
+      const hov = mx - 10 * k,
+        leave = ease(seg(t, 17.6, 23));
+      const hx =
+        mix(-300 * k, hov, ease(seg(t, 0, 4.5))) +
+        Math.sin(a * 1.1) * 3 +
+        leave * (W * 0.95 + 400 * k);
+      const hy =
+        mix(H * 0.08, H * 0.2, ease(seg(t, 0, 4.5))) -
+        16 * ease(seg(t, 8.6, 11)) -
+        leave * H * 0.12 +
+        Math.sin(a * 1.7) * 2;
+      const tilt =
+        0.07 * (1 - ease(seg(t, 2.5, 4.5))) +
+        0.1 * Math.sin(Math.min(1, leave * 1.4) * Math.PI * 0.6);
+      const ax = hx + 10 * k,
+        ay = hy + 52 * k;
+
+      // Sound update (pans with X position across screen, fades as it leaves)
+      stormRef.current?.setHeli(
+        ease(seg(t, 0.2, 4.5)) * (1 - leave),
+        clamp((hx / W) * 2 - 1, -1, 1) * 0.85
+      );
+
+      // Downward rotor wind displacement on water
+      if (t > 3 && t < 17.8) {
+        for (let i = 0; i < 3; i++) {
+          const p = (a * 0.6 + i / 3) % 1;
+          ctx.strokeStyle = `rgba(225,220,200,${0.3 * (1 - p)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(mx, wyM + 6 * k, (40 + p * 150) * k, (6 + p * 16) * k, 0, 0, 7);
+          ctx.stroke();
+        }
+      }
+
+      // 7. Rescue Line & Survivor Lift from Water
+      const ext = ease(seg(t, 4.8, 7)),
+        endLow = wyM - 70 * s,
+        hangY = Math.max(Math.min(endLow - 10, wyM - 230 * s), ay + 60 * k);
+      const endY =
+        t < 8.6
+          ? mix(ay + 4 * k, endLow, ext)
+          : mix(endLow, hangY, ease(seg(t, 8.6, 11)));
+      const swing = Math.sin(a * 1.5) * 12 * k * seg(t, 8.6, 10),
+        lean = -45 * k * ease(seg(t, 17.6, 19.5));
+      const endX = ax + (mx - ax) * ext * (1 - seg(t, 8.6, 9)) + swing + lean;
+      const grab = ease(seg(t, 7.3, 8.6));
+
+      let torch: number[] | null = null,
+        torchDir = [0, 1],
+        torchOn = 0;
+
+      if (hx < W + 500 * k) {
+        // Steel cable
+        if (t > 4.8) {
+          ctx.strokeStyle = '#cdb98e';
+          ctx.lineWidth = 3.2 * k + 1;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.quadraticCurveTo(
+            (ax + endX) / 2 + Math.sin(a * 2) * 6 * k * ext,
+            (ay + endY) / 2,
+            endX,
+            endY
+          );
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(80,60,30,.7)';
+          ctx.setLineDash([3, 5]);
+          ctx.lineWidth = 2 * k + 0.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        const hxS = mx + Math.sin(a * 1.3) * 4 * s,
+          hyS =
+            wyM -
+            22 * s +
+            Math.sin(a * 2.1) * 5 * s +
+            Math.max(0, Math.sin(a * 0.9)) * 9 * s;
+        const mhx = mix(hxS, endX, grab),
+          mhy = mix(hyS, endY + 36 * s, grab);
+        const reach = Math.max(ease(seg(t, 6.2, 7.3)) * 0.7, grab);
+        const fR = [
+          hxS + 34 * s + Math.sin(a * 5) * 12 * s,
+          hyS - 30 * s - Math.abs(Math.cos(a * 3.7)) * 26 * s,
+        ];
+        const fL = [
+          hxS - 30 * s + Math.sin(a * 4.3) * 10 * s,
+          hyS + 6 * s + Math.cos(a * 6) * 8 * s,
+        ];
+        const rr = [mix(fR[0], endX + 3 * s, reach), mix(fR[1], endY, reach)];
+        const shR = [mhx + 17 * s, mhy + 22 * s],
+          dx = P.x - shR[0],
+          dy = P.y - shR[1],
+          dl = Math.hypot(dx, dy) || 1;
+
+        // Torch aims directly from LEFT across to RIGHT end!
+        torchDir = [dx / dl, dy / dl];
+        torchOn = ease(seg(t, 10.8, 11.8)) * (1 - ease(seg(t, 18, 19)));
+        const th = [shR[0] + torchDir[0] * 40 * s, shR[1] + torchDir[1] * 40 * s];
+        const hands = [
+          [mix(fL[0], endX - 3 * s, grab), mix(fL[1], endY, grab)],
+          [mix(rr[0], th[0], torchOn), mix(rr[1], th[1], torchOn)],
+        ];
+
+        // Draw the man
+        man(mhx, mhy, s, a, wyM, hands, grab < 0.5);
+
+        if (torchOn > 0.05) torch = hands[1];
+
+        // Water ripple circles around survivor's body
+        const ry = wyM + Math.sin(a * 3) * 1.5;
+        for (let i = 0; i < 3; i++) {
+          const p = (a * 0.8 + i / 3) % 1;
+          ctx.strokeStyle = `rgba(230,225,205,${0.45 * (1 - p)})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(hxS, ry, (18 + p * 40) * s, (3 + p * 8) * s, 0, 0, 7);
+          ctx.stroke();
+        }
+      }
+
+      // Draw Helicopter
+      heli(hx, hy, k, tilt, a);
+
+      // Searchlight sweeping down from helicopter
+      const ls = [hx + 150 * k, hy + 46 * k];
+      beam(
+        ls[0],
+        ls[1],
+        mix(mx, endX, grab),
+        mix(wyM - 10 * s, endY + 60 * s, grab),
+        mix(150, 55, grab) * k,
+        seg(t, 3.4, 4.6) * (1 - 0.55 * grab) * (1 - seg(t, 17.6, 19))
+      );
+
+      // 8. HANDHELD TORCH BEAM (FROM LEFT TO RIGHT END)
+      if (torch) {
+        ctx.save();
+        ctx.fillStyle = '#15181c';
+        ctx.translate(torch[0], torch[1]);
+        ctx.rotate(Math.atan2(torchDir[1], torchDir[0]));
+        ctx.fillRect(-4 * s, -4 * s, 20 * s, 8 * s);
+        ctx.fillStyle = '#fff6d8';
+        ctx.fillRect(16 * s, -5.5 * s, 3 * s, 11 * s);
+        ctx.restore();
+
+        // Beam sweeps from left to right end!
+        beam(
+          torch[0] + torchDir[0] * 19 * s,
+          torch[1] + torchDir[1] * 19 * s,
+          P.x,
+          P.y,
+          46 * k,
+          torchOn
+        );
+      }
+
+      // 9. Radial Light Bloom on Login Card
+      const gr = ease(seg(t, 12.2, REVEAL + 0.6)),
+        ga = 1 - 0.55 * seg(t, REVEAL + 1, REVEAL + 3.5);
+      if (gr > 0) {
+        const r = mix(10, Math.max(W, H) * 0.35, gr);
+        const g = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, r);
+        g.addColorStop(0, `rgba(255,252,238,${0.6 * ga})`);
+        g.addColorStop(0.4, `rgba(255,240,200,${0.3 * ga})`);
+        g.addColorStop(1, 'rgba(255,240,200,0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(P.x, P.y, r, 0, 7);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 10. Rain + Splashes
+      ctx.strokeStyle = 'rgba(235,230,210,.28)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 40; i++) {
+        ctx.beginPath();
+        ctx.ellipse(
+          Math.random() * W,
+          wy + 20 + Math.random() * (H - wy - 20),
+          2 + Math.random() * 7,
+          1 + Math.random() * 2,
+          0,
+          0,
+          7
+        );
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(215,225,230,.42)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const d of rain) {
+        d.y += d.v * dt;
+        d.x -= d.v * dt * 0.3;
+        if (d.y > H) {
+          d.y = -20;
+          d.x = Math.random() * (W + 120);
+        }
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x + d.l * 0.3, d.y - d.l);
+      }
+      ctx.stroke();
+
+      // 11. Lightning & Thunder
+      const m = a % 7,
+        fl =
+          m > 3 && m < 3.1
+            ? 0.4
+            : m > 3.2 && m < 3.3
+            ? 0.22
+            : m > 5.5 && m < 5.58
+            ? 0.25
+            : 0;
+      if (fl) {
+        ctx.fillStyle = `rgba(225,235,245,${fl})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (fl && !prevFl) stormRef.current?.thunder(fl / 0.4);
+      prevFl = fl;
+
+      const dk = ctx.createLinearGradient(0, 0, 0, H);
+      dk.addColorStop(0, 'rgba(8,12,16,.5)');
+      dk.addColorStop(1, 'rgba(8,12,16,.3)');
+      ctx.fillStyle = dk;
+      ctx.fillRect(0, 0, W, H);
+
+      // 12. Captions & Reveal Login Card
+      let ci = 0;
+      caps.forEach(([ct], i) => {
+        if (t >= ct) ci = i;
+      });
+      if (ci !== capIdx) {
+        capIdx = ci;
+        setCaption(caps[ci][1]);
+      }
+
+      if (t >= REVEAL && !revealed) {
+        revealed = true;
+        setReady(true);
+        sfx.accept();
+        gsap.fromTo(
+          card.current,
+          { autoAlpha: 0, scale: 0.2, filter: 'brightness(4)' },
+          {
+            autoAlpha: 1,
+            scale: 1,
+            filter: 'brightness(1)',
+            duration: reduceMotion ? 0 : 1.2,
+            ease: 'power3.out',
+          }
+        );
+      }
+    };
+
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      if (card.current) gsap.killTweensOf(card.current);
+    };
+  }, [reduceMotion]);
+
+  // Audio Ambience
+  useEffect(() => {
+    if (!soundEnabled) return;
+    const storm = startStorm();
+    stormRef.current = storm;
+    return () => {
+      storm.stop();
+      if (stormRef.current === storm) stormRef.current = null;
+    };
+  }, [soundEnabled]);
+
+  // Skip Intro / Fast Forward to Login
+  const handleSkipIntro = () => {
+    startRef.current = performance.now() - REVEAL * 1000;
+    setReady(true);
+    sfx.accept();
+    if (card.current) {
+      gsap.to(card.current, {
+        autoAlpha: 1,
+        scale: 1,
+        filter: 'brightness(1)',
+        duration: 0.5,
+        ease: 'power2.out',
+      });
+    }
   };
 
-  const handleReplayFlyby = () => {
-    startChoreography();
+  // Replay
+  const handleReplay = () => {
+    startRef.current = performance.now();
+    setReady(false);
+    if (card.current) {
+      gsap.set(card.current, { autoAlpha: 0, scale: 0.2 });
+    }
   };
 
-  // Switch role and update demo credentials
-  const handleSelectRole = (role: RoleType) => {
-    setSelectedRole(role);
-    setIsRegisterMode(false);
-    setErrorMsg(null);
+  // Select Role & auto-fill demo credentials
+  const pickRole = (r: RoleType) => {
+    setRole(r);
+    setErr(null);
     setSuccessMsg(null);
-
-    if (role === 'RELIEF_CENTER') {
-      setUsernameOrEmail('coord_alpha');
+    if (r === 'RELIEF_CENTER') {
+      setUsername('coord_alpha');
       setPassword('Relief@12345');
-    } else if (role === 'OPERATOR') {
-      setUsernameOrEmail('operator1');
+    } else if (r === 'OPERATOR') {
+      setUsername('operator1');
       setPassword('Operator@12345');
-    } else if (role === 'ADMIN') {
-      setUsernameOrEmail('admin');
+    } else if (r === 'ADMIN') {
+      setUsername('admin');
       setPassword('Admin@12345');
     }
   };
 
-  // Submit Login
-  const handleLogin = async (e: React.FormEvent) => {
+  // Login Submit
+  const handleLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
     setSuccessMsg(null);
 
     try {
       const data = await ApiClient.post<AuthResponse>('/auth/login', {
-        username_or_email: usernameOrEmail,
+        username_or_email: username,
         password: password,
       });
 
       ApiClient.setToken(data.access_token);
       setAuthData(data);
-      setSuccessMsg(`Authenticated successfully as ${data.username} (${data.role}). Session active!`);
-    } catch (err: unknown) {
-      setErrorMsg((err as Error).message || 'Authentication failed. Please verify credentials.');
+      sfx.done();
+      setSuccessMsg(`Authenticated as ${data.username} (${data.role}). Session active!`);
+    } catch (error: unknown) {
+      sfx.error();
+      setErr((error as Error).message || 'Invalid username or password.');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  // Submit Self-Registration
-  const handleRegister = async (e: React.FormEvent) => {
+  // Registration Submit (Relief Center)
+  const handleRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
+    if (busy) return;
+    if (password !== confirmPassword) {
+      setErr('Passwords do not match.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
     setSuccessMsg(null);
 
     try {
       await ApiClient.post('/auth/register-relief-center', {
         email: regEmail,
-        username: regUsername,
-        password: regPassword,
+        username: username,
+        password: password,
         role: 'RELIEF_CENTER',
         center_id: regCenterId || 1,
       });
 
-      setSuccessMsg('NDRF Relief Center account created successfully! You can now log in.');
-      setIsRegisterMode(false);
-      setUsernameOrEmail(regUsername);
-      setPassword(regPassword);
-    } catch (err: unknown) {
-      setErrorMsg((err as Error).message || 'Registration failed. Check if username or email is already taken.');
+      sfx.done();
+      setSuccessMsg('NDRF Relief Center account created successfully! You can now sign in.');
+      setMode('signin');
+    } catch (error: unknown) {
+      sfx.error();
+      setErr((error as Error).message || 'Registration failed.');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
@@ -217,378 +1031,304 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
     ApiClient.setToken(null);
     setAuthData(null);
     setSuccessMsg(null);
-    setErrorMsg(null);
+    setErr(null);
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-[#020617] text-slate-100 flex flex-col font-sans selection:bg-emergency-orange selection:text-white overflow-hidden">
-      {/* ----------------- 3D FULL REALISTIC BACKGROUND SCENE ----------------- */}
-      {/* 
-        - Left: Drenched person waist-deep in water holding handheld torch
-        - Top/Sky: Rescue helicopter flying in, hovering, and leaving into background
-        - Torch light: Beams from Left across to the Right end
-      */}
-      <RealisticRescueLoginCanvas
-        torchOn={torchOn}
-        torchIntensity={torchIntensity}
-        heloPhase={heloPhase}
-        heloProgress={heloProgress}
-      />
+    <div ref={root} className="relative h-screen w-screen overflow-hidden bg-[#02050c] text-slate-100 font-sans select-none">
+      {/* ----------------- PROCEDURAL CANVAS SIMULATION ----------------- */}
+      <canvas ref={cv} className="absolute inset-0 h-full w-full pointer-events-none" aria-hidden />
+
+      {/* Atmospheric Vignette */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_45%,rgba(2,5,12,0.65)_100%)]" />
 
       {/* ----------------- TOP TACTICAL NAVIGATION BAR ----------------- */}
-      <header className="border-b border-command-700/80 bg-command-950/70 backdrop-blur-md px-6 py-3 flex items-center justify-between relative z-30">
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={onReturnToHome}>
-          <div className="p-2 bg-emergency-orange/10 border border-emergency-orange/30 rounded-xl text-emergency-orange">
-            <ShieldAlert className="w-5 h-5 animate-pulse" />
+      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between p-4 md:px-8">
+        <div className="cursor-pointer" onClick={onReturnToHome}>
+          <div className="text-xl sm:text-2xl font-black tracking-[0.2em] text-white flex items-center gap-1.5 font-mono">
+            <span>RESQ</span>
+            <span className="text-emergency-orange">-X</span>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-mono text-[10px] tracking-widest text-emergency-orange font-bold uppercase">
-                RESCUE COMMAND PORTAL
-              </span>
-              <span className="text-[10px] bg-command-800 text-slate-400 px-2 py-0.5 rounded font-mono border border-command-700">
-                ACTIVE
-              </span>
-            </div>
-            <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-              RESQ-X PLATFORM ACCESS
-            </h1>
-          </div>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-cyan-300/80 font-mono">
+            Disaster Relief Command System
+          </p>
         </div>
 
-        {/* Tactical Controls: Replay, Audio, Landing */}
-        <div className="flex items-center space-x-2.5">
-          {/* Mute/Unmute */}
+        {/* Action Controls */}
+        <div className="flex items-center gap-2">
+          {!ready && (
+            <button
+              onClick={handleSkipIntro}
+              className="btn btn-amber text-xs font-mono !py-1.5"
+              title="Skip straight to login form"
+            >
+              <FastForward size={14} />
+              <span className="hidden sm:inline">SKIP INTRO</span>
+            </button>
+          )}
+
           <button
-            onClick={handleToggleMute}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-command-900/80 hover:bg-command-800 text-slate-300 border border-command-700 text-xs font-mono transition-colors"
+            onClick={handleReplay}
+            className="btn text-xs font-mono !py-1.5"
+            title="Replay Rescue Scene"
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden sm:inline">{isMuted ? 'MUTED' : 'AUDIO'}</span>
+            <RotateCcw size={14} />
+            <span className="hidden sm:inline">REPLAY</span>
           </button>
 
-          {/* Replay Helicopter & Torch Sequence */}
           <button
-            onClick={handleReplayFlyby}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-command-900/80 hover:bg-command-800 text-slate-300 hover:text-white border border-command-700 text-xs font-mono transition-colors"
-            title="Replay Helicopter & Handheld Torch Sequence"
+            className="btn text-xs font-mono !py-1.5"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            aria-label={soundEnabled ? 'Mute sound' : 'Enable sound'}
           >
-            <RotateCcw className="w-3.5 h-3.5 text-emergency-orange" />
-            <span className="hidden sm:inline">REPLAY RESCUE FLYBY</span>
+            {soundEnabled ? <Volume2 size={14} className="text-cyan-400" /> : <VolumeX size={14} className="text-rose-400" />}
           </button>
 
-          {/* Home Landing */}
+          <button
+            className="btn text-xs font-mono !py-1.5"
+            onClick={() => setReduceMotion(!reduceMotion)}
+            title="Toggle reduced motion"
+          >
+            <Waves size={14} />
+          </button>
+
           <button
             onClick={onReturnToHome}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emergency-orange hover:bg-emergency-orange-hover text-white text-xs font-mono transition-colors shadow-glow-orange font-semibold"
+            className="btn text-xs font-mono !py-1.5 bg-emergency-orange/80 hover:bg-emergency-orange text-white border-emergency-orange"
           >
-            <span>HOME LANDING</span>
+            <span>HOME</span>
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* ----------------- MAIN LAYOUT: PERSON ON LEFT, LOGIN ON RIGHT END ----------------- */}
-      <main className="flex-1 flex flex-col md:flex-row items-center justify-between p-4 sm:p-6 lg:p-10 relative z-20 pointer-events-none">
-        {/* Left Side: Water & Telemetry Indicator */}
-        <div className="w-full md:w-5/12 flex flex-col justify-end p-4 pointer-events-auto space-y-2 mt-auto md:mt-0">
-          <div className="bg-command-950/80 backdrop-blur-md p-3.5 rounded-xl border border-command-700/80 max-w-sm space-y-1.5 shadow-2xl">
-            <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-emergency-orange" />
-                SURVIVOR BEACON TELEMETRY
-              </span>
-              <span className="text-emerald-400 font-bold">SIGNAL LOCKED</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-snug">
-              {choreographyStep}
-            </p>
-            <div className="text-[10px] font-mono text-emergency-orange pt-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emergency-orange animate-ping" />
-              <span>HANDHELD TORCH TARGETING LOGIN TERMINAL</span>
-            </div>
-          </div>
+      {/* ----------------- SUBTITLES / MISSION TICKER ----------------- */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-4">
+        <div className="rounded-full border border-cyan-400/30 bg-slate-950/80 backdrop-blur-md px-4 py-1.5 text-xs text-cyan-200 font-mono shadow-2xl flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emergency-orange animate-ping" />
+          <span>{caption}</span>
         </div>
+      </div>
 
-        {/* Right Side: The Illuminated Login Panel (Right End) */}
-        <div 
-          className={`w-full md:w-7/12 lg:w-5/12 pointer-events-auto transition-all duration-700 ${
-            loginCardVisible 
-              ? 'opacity-100 translate-x-0' 
-              : 'opacity-0 translate-x-12'
-          }`}
+      {/* ----------------- LOGIN CARD ON RIGHT END (ILLUMINATED BY TORCH) ----------------- */}
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-end px-4 sm:px-10 lg:px-16 overflow-y-auto pt-16 pb-16">
+        <div
+          ref={card}
+          className="glass pointer-events-auto invisible w-full max-w-sm p-6 shadow-[0_0_60px_rgba(255,240,200,0.35)] border border-cyan-400/30 rounded-2xl"
+          style={{ visibility: 'hidden' }}
         >
-          <div className="bg-command-900/90 border border-command-700/80 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden hud-border shadow-emergency-orange/10">
-            {/* Top Header of Card */}
-            <div className="px-6 py-3.5 bg-command-950/80 border-b border-command-700/80 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Terminal className="w-4 h-4 text-emergency-orange" />
-                <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-bold">
-                  AUTHENTICATION GATEWAY
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800 px-2 py-0.5 rounded">
-                JWT SHA-256 RBAC
-              </span>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* If Logged In: Active Session */}
-              {authData ? (
-                <div className="space-y-5 animate-fadeIn">
-                  <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/80 text-center space-y-2.5">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
-                      <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-white">Active Session Initialized</h3>
-                    <div className="text-xs font-mono text-slate-300 space-y-1">
-                      <p>User: <strong className="text-white">{authData.username}</strong></p>
-                      <p>Role: <strong className="text-emerald-400">{authData.role}</strong></p>
-                      {authData.center_id && <p>Assigned Center: <strong className="text-cyan-400">Camp #{authData.center_id}</strong></p>}
-                      <p className="text-[10px] text-slate-500 truncate pt-1">Token: {authData.access_token.slice(0, 32)}...</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <button
-                      onClick={handleLogout}
-                      className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-command-800 hover:bg-command-700 text-white font-mono text-xs font-semibold transition-colors border border-command-600"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>LOGOUT</span>
-                    </button>
-
-                    <button
-                      onClick={onReturnToHome}
-                      className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-xl bg-emergency-orange hover:bg-emergency-orange-hover text-white font-mono text-xs font-semibold transition-colors shadow-glow-orange"
-                    >
-                      <span>RETURN HOME</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+          {authData ? (
+            /* Active Authenticated Session */
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-700/80 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
+                  <CheckCircle2 size={20} />
                 </div>
-              ) : (
-                <>
-                  {/* 3 Role Selection Tabs */}
-                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-command-950 rounded-xl border border-command-700">
-                    <button
-                      onClick={() => handleSelectRole('RELIEF_CENTER')}
-                      className={`flex flex-col items-center py-2 px-1.5 rounded-lg font-mono text-xs transition-all ${
-                        selectedRole === 'RELIEF_CENTER'
-                          ? 'bg-emergency-orange text-white font-bold shadow-glow-orange'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5 mb-1" />
-                      <span className="text-[10px] leading-tight">RELIEF CAMP</span>
-                    </button>
+                <h3 className="text-base font-bold text-white font-mono">Active Session Initialized</h3>
+                <div className="text-xs font-mono text-slate-300 space-y-1">
+                  <p>User: <strong className="text-white">{authData.username}</strong></p>
+                  <p>Role: <strong className="text-emerald-400">{authData.role}</strong></p>
+                  {authData.center_id && <p>Assigned Center: <strong className="text-cyan-400">Camp #{authData.center_id}</strong></p>}
+                  <p className="text-[10px] text-slate-500 truncate pt-1">JWT: {authData.access_token.slice(0, 28)}...</p>
+                </div>
+              </div>
 
-                    <button
-                      onClick={() => handleSelectRole('OPERATOR')}
-                      className={`flex flex-col items-center py-2 px-1.5 rounded-lg font-mono text-xs transition-all ${
-                        selectedRole === 'OPERATOR'
-                          ? 'bg-cyan-500 text-command-950 font-bold shadow-glow-cyan'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Truck className="w-3.5 h-3.5 mb-1" />
-                      <span className="text-[10px] leading-tight">OPERATOR</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectRole('ADMIN')}
-                      className={`flex flex-col items-center py-2 px-1.5 rounded-lg font-mono text-xs transition-all ${
-                        selectedRole === 'ADMIN'
-                          ? 'bg-purple-500 text-white font-bold shadow-lg shadow-purple-500/20'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <UserCheck className="w-3.5 h-3.5 mb-1" />
-                      <span className="text-[10px] leading-tight">SYS ADMIN</span>
-                    </button>
-                  </div>
-
-                  {/* Role Brief & Security Notice */}
-                  <div className="p-3 rounded-xl bg-command-850/80 border border-command-700/80 text-[11px] text-slate-300">
-                    {selectedRole === 'RELIEF_CENTER' && (
-                      <span><strong>NDRF / Relief Camp Personnel:</strong> Submit population needs & track dispatches.</span>
-                    )}
-                    {selectedRole === 'OPERATOR' && (
-                      <span><strong>Central Logistics Officer:</strong> Inventory allocation, 0/1 Knapsack & Dijkstra routing.</span>
-                    )}
-                    {selectedRole === 'ADMIN' && (
-                      <span><strong>System Administrator:</strong> Operator account creation & network topology audit.</span>
-                    )}
-                  </div>
-
-                  {/* Alerts */}
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-start space-x-2">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-                      <span>{errorMsg}</span>
-                    </div>
-                  )}
-                  {successMsg && (
-                    <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-start space-x-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
-                      <span>{successMsg}</span>
-                    </div>
-                  )}
-
-                  {/* Form */}
-                  {isRegisterMode ? (
-                    <form onSubmit={handleRegister} className="space-y-3">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-slate-400">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={regEmail}
-                          onChange={(e) => setRegEmail(e.target.value)}
-                          placeholder="coordinator@ndrf.gov.in"
-                          className="w-full px-3 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-mono text-slate-400">Username</label>
-                          <input
-                            type="text"
-                            required
-                            value={regUsername}
-                            onChange={(e) => setRegUsername(e.target.value)}
-                            placeholder="coord_beta"
-                            className="w-full px-3 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-mono text-slate-400">Center ID</label>
-                          <input
-                            type="number"
-                            min="1"
-                            required
-                            value={regCenterId}
-                            onChange={(e) => setRegCenterId(parseInt(e.target.value) || 1)}
-                            className="w-full px-3 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-slate-400">Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-2.5 rounded-lg bg-emergency-orange hover:bg-emergency-orange-hover text-white font-mono text-xs font-bold transition-all shadow-glow-orange"
-                      >
-                        {loading ? 'REGISTERING...' : 'CREATE RELIEF ACCOUNT'}
-                      </button>
-                      <div className="text-center pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setIsRegisterMode(false)}
-                          className="text-xs font-mono text-slate-400 hover:text-white"
-                        >
-                          Already have an account? Sign in
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleLogin} className="space-y-3.5">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-slate-400 flex justify-between">
-                          <span>USERNAME / EMAIL</span>
-                          <span className="text-[10px] text-slate-400">Pre-filled Demo</span>
-                        </label>
-                        <div className="relative">
-                          <User className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-                          <input
-                            type="text"
-                            required
-                            value={usernameOrEmail}
-                            onChange={(e) => setUsernameOrEmail(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-slate-400 flex justify-between">
-                          <span>PASSWORD</span>
-                          <span className="text-[10px] text-slate-400">Bcrypt Salted</span>
-                        </label>
-                        <div className="relative">
-                          <KeyRound className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-9 pr-9 py-2 rounded-lg bg-command-950 border border-command-700 text-white text-xs font-mono focus:border-emergency-orange"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                          >
-                            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-2.5 rounded-lg bg-emergency-orange hover:bg-emergency-orange-hover text-white font-mono text-xs font-bold tracking-wider transition-all shadow-glow-orange flex items-center justify-center space-x-2"
-                      >
-                        {loading ? (
-                          <span>AUTHENTICATING...</span>
-                        ) : (
-                          <>
-                            <span>ACCESS {selectedRole.replace('_', ' ')} PORTAL</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </>
-                        )}
-                      </button>
-
-                      {selectedRole === 'RELIEF_CENTER' && (
-                        <div className="text-center pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setIsRegisterMode(true)}
-                            className="text-[11px] font-mono text-emergency-orange hover:underline"
-                          >
-                            Register New Relief Center Camp
-                          </button>
-                        </div>
-                      )}
-                    </form>
-                  )}
-                </>
-              )}
+              <div className="flex gap-2">
+                <button onClick={handleLogout} className="btn flex-1 text-xs">
+                  <LogOut size={14} />
+                  <span>LOGOUT</span>
+                </button>
+                <button onClick={onReturnToHome} className="btn btn-amber flex-1 text-xs">
+                  <span>OVERVIEW</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </main>
+          ) : (
+            <>
+              {/* 3 Role Selection Radio Buttons */}
+              <div className="mb-3 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Sign in as">
+                {([
+                  ['RELIEF_CENTER', 'NDRF Team', 'Request relief', <LifeBuoy key="a" size={15} />],
+                  ['OPERATOR', 'Operator', 'Triage & dispatch', <Radio key="b" size={15} />],
+                  ['ADMIN', 'Sys Admin', 'Administer', <UserCheck key="c" size={15} />],
+                ] as const).map(([r, title, sub, icon]) => (
+                  <button
+                    key={r}
+                    type="button"
+                    role="radio"
+                    aria-checked={role === r}
+                    onClick={() => pickRole(r)}
+                    className={`rounded-xl border p-2 text-left transition-all ${
+                      role === r
+                        ? 'border-amber-300/80 bg-amber-300/15 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.25)]'
+                        : 'border-slate-600/60 text-slate-400 hover:border-cyan-400/40'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-bold font-mono">
+                      {icon}
+                      {title}
+                    </span>
+                    <span className="mt-0.5 block text-[0.62rem] leading-tight opacity-75 truncate">
+                      {sub}
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-      {/* ----------------- BOTTOM TACTICAL FOOTER ----------------- */}
-      <footer className="border-t border-command-700/80 bg-command-950/70 text-slate-400 text-xs px-6 py-2.5 flex items-center justify-between font-mono relative z-30">
-        <div>RESQ-X Crisis Portal &bull; Live Telemetry Operational</div>
-        <div className="flex items-center space-x-3 text-[11px]">
-          <span className="text-emerald-400 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            BACKEND REST API (:8000)
-          </span>
+              {/* Sign In vs Register Toggle */}
+              <div className="mb-3 flex rounded-xl border border-cyan-400/20 p-1" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={mode === 'signin'}
+                  className={`btn flex-1 !border-0 text-xs ${mode === 'signin' ? '' : '!bg-transparent !text-slate-400'}`}
+                  onClick={() => { setMode('signin'); setErr(null); }}
+                  type="button"
+                >
+                  <LogIn size={13} /> Sign In
+                </button>
+                {role === 'RELIEF_CENTER' && (
+                  <button
+                    role="tab"
+                    aria-selected={mode === 'signup'}
+                    className={`btn flex-1 !border-0 text-xs ${mode === 'signup' ? '' : '!bg-transparent !text-slate-400'}`}
+                    onClick={() => { setMode('signup'); setErr(null); }}
+                    type="button"
+                  >
+                    <UserPlus size={13} /> Register Camp
+                  </button>
+                )}
+              </div>
+
+              <div className="mb-3">
+                <h1 className="text-sm font-bold tracking-wide text-white font-mono">
+                  {role === 'RELIEF_CENTER' ? 'NDRF / Relief Camp' : role === 'OPERATOR' ? 'Central Logistics Operator' : 'System Administrator'}{' '}
+                  {mode === 'signin' ? 'Sign In' : 'Registration'}
+                </h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {role === 'RELIEF_CENTER'
+                    ? 'Submit frontline population requirements and track dispatches.'
+                    : role === 'OPERATOR'
+                    ? 'Manage warehouse inventory, pack vehicles with 0/1 Knapsack, and route.'
+                    : 'System administration, operator account provisioning, and audit logs.'}
+                </p>
+              </div>
+
+              {/* Status Notifications */}
+              {err && (
+                <div className="p-2.5 mb-3 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-start gap-1.5">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5 text-rose-400" />
+                  <span>{err}</span>
+                </div>
+              )}
+              {successMsg && (
+                <div className="p-2.5 mb-3 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-start gap-1.5">
+                  <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-emerald-400" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              {/* Auth Form */}
+              <form onSubmit={mode === 'signin' ? handleLoginSubmit : handleRegisterSubmit} className="space-y-3" noValidate>
+                {mode === 'signup' && (
+                  <div>
+                    <label className="label" htmlFor="lg-email">Official Email</label>
+                    <input
+                      id="lg-email"
+                      type="email"
+                      className="field text-xs font-mono"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="coordinator@ndrf-camp.gov.in"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="label" htmlFor="lg-user">Username</label>
+                  <input
+                    id="lg-user"
+                    className="field text-xs font-mono"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    maxLength={24}
+                    required
+                  />
+                </div>
+
+                {mode === 'signup' && (
+                  <div>
+                    <label className="label" htmlFor="lg-cid">Relief Center ID</label>
+                    <input
+                      id="lg-cid"
+                      type="number"
+                      min="1"
+                      className="field text-xs font-mono"
+                      value={regCenterId}
+                      onChange={(e) => setRegCenterId(parseInt(e.target.value) || 1)}
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex justify-between items-center">
+                    <label className="label" htmlFor="lg-pw">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-slate-400 hover:text-white text-[10px] pb-1 flex items-center gap-1"
+                    >
+                      {showPassword ? <EyeOff size={11} /> : <Eye size={11} />}
+                      <span>{showPassword ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+                  <input
+                    id="lg-pw"
+                    type={showPassword ? 'text' : 'password'}
+                    className="field text-xs font-mono"
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    maxLength={128}
+                    required
+                  />
+                </div>
+
+                {mode === 'signup' && (
+                  <div>
+                    <label className="label" htmlFor="lg-pw2">Confirm Password</label>
+                    <input
+                      id="lg-pw2"
+                      type={showPassword ? 'text' : 'password'}
+                      className="field text-xs font-mono"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      maxLength={128}
+                      required
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn btn-amber w-full !py-2.5 font-mono text-xs !tracking-[0.12em]"
+                  disabled={busy}
+                >
+                  {busy ? 'AUTHENTICATING...' : mode === 'signin' ? 'SIGN IN & ENTER COMMAND' : 'CREATE CAMP & ENTER'}
+                </button>
+              </form>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-700/60 text-[10px] leading-relaxed text-slate-400 font-mono flex items-center justify-between">
+                <span>Demo: <span className="text-amber-300">{username}</span> / <span className="text-slate-300">••••••••</span></span>
+                <span className="text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> API :8000</span>
+              </div>
+            </>
+          )}
         </div>
-      </footer>
+      </div>
     </div>
   );
 }

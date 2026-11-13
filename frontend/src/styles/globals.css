@@ -76,3 +76,82 @@ body {
   border-bottom: 2px solid #ff5722;
   border-right: 2px solid #ff5722;
 }
+
+
+/* Login Cinematic & Tactical UI Styles */
+.glass {
+  background: linear-gradient(145deg, rgba(14, 26, 58, 0.78), rgba(6, 12, 30, 0.82));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  box-shadow: 0 0 0 1px rgba(2, 5, 12, 0.6), 0 8px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(186, 230, 253, 0.08);
+  border-radius: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.08);
+  color: #cffafe;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn:hover:not(:disabled) {
+  background: rgba(34, 211, 238, 0.2);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.3);
+  transform: translateY(-1px);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-amber {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+}
+.btn-amber:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.28);
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+}
+
+.field {
+  width: 100%;
+  background: rgba(2, 5, 12, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 9px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field:focus {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
+}
+
+.label {
+  display: block;
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  margin-bottom: 0.3rem;
+  font-family: monospace;
+}
+
+.num {
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
