@@ -1,10 +1,10 @@
-from typing import Generator, List
+from typing import List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.database import SessionLocal, get_db
+from app.core.database import get_db
 from app.core.security import decode_access_token, UserRole
 from app.models.user import User
 
@@ -14,7 +14,7 @@ def get_current_user(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> User:
-    payload = decode_access_token(token)
+    payload = decode_access_token(token, db=db)
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
@@ -35,6 +35,8 @@ def get_current_user(
             detail="Inactive user account"
         )
     return user
+
+get_current_active_user = get_current_user
 
 class RoleChecker:
     def __init__(self, allowed_roles: List[UserRole]):

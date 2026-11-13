@@ -1,5 +1,10 @@
 import os
+import sys
+import asyncio
 import pytest
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Ensure test suite runs with fast SQLite test database without attempting network connections
 os.environ["DATABASE_URL"] = "sqlite:///./test_resqx.db"

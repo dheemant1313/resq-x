@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "resqx-super-secret-key-change-in-production-disaster-relief-2026"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Database
     # Default points to PostgreSQL; can be overridden via environment or fallback to sqlite for testing

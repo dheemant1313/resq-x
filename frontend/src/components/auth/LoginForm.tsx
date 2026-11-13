@@ -94,6 +94,9 @@ export default function LoginForm({
 
       // Store JWT token only (passwords are NEVER stored in localStorage)
       ApiClient.setToken(data.access_token);
+      if (data.refresh_token) {
+        ApiClient.setRefreshToken(data.refresh_token);
+      }
       sfx.done();
       onSuccess(data);
     } catch (err: unknown) {

@@ -18,6 +18,7 @@ def seed_test_users():
                 username="dheemant",
                 hashed_password=get_password_hash("dheemant123"),
                 role=UserRole.RELIEF_CENTER,
+                center_id=1,
                 is_active=True
             ))
         # Seed Operator dheemant

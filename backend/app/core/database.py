@@ -23,7 +23,12 @@ def check_tcp_port(host: str, port: int, timeout: float = 0.5) -> bool:
         return False
 
 def get_engine():
-    db_url = settings.DATABASE_URL
+    db_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    if db_url.startswith("sqlite"):
+        return create_engine(
+            db_url,
+            connect_args={"check_same_thread": False}
+        )
     if db_url.startswith("postgresql"):
         # Parse host and port
         parsed = urlparse(db_url)

@@ -929,8 +929,8 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
     }
   };
 
-  const handleLogout = () => {
-    ApiClient.setToken(null);
+  const handleLogout = async () => {
+    await ApiClient.logout();
     setAuthData(null);
     setAuthStage('role_selection');
   };
