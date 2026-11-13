@@ -80,6 +80,97 @@ def seed_database():
                 "contact_person": "Sub-Inspector Vikram Rathore",
                 "contact_phone": "+91-9876543212",
                 "status": "ACTIVE"
+            },
+            {
+                "name": "Delta Emergency Staging Hub Delta (Estuary Surge)",
+                "code": "RC-DELTA",
+                "location_name": "Krishna Delta Lowlands",
+                "latitude": 16.2050,
+                "longitude": 81.1400,
+                "disaster_type": DisasterType.FLOOD,
+                "severity_level": SeverityLevel.CRITICAL,
+                "affected_population": 15800,
+                "contact_person": "Capt. Arvind Swaminathan",
+                "contact_phone": "+91-9876543213",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Northern Valley Relief Station Echo (Flash Flood & Debris)",
+                "code": "RC-ECHO",
+                "location_name": "Alaknanda Gorge Base",
+                "latitude": 30.3800,
+                "longitude": 79.3200,
+                "disaster_type": DisasterType.FLOOD,
+                "severity_level": SeverityLevel.CRITICAL,
+                "affected_population": 6100,
+                "contact_person": "Major Devendra Rawat",
+                "contact_phone": "+91-9876543214",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Island Forward Outpost Foxtrot (Tsunami & Coastal Breach)",
+                "code": "RC-FOXTROT",
+                "location_name": "Car Nicobar Coastal Ring",
+                "latitude": 9.1550,
+                "longitude": 92.7660,
+                "disaster_type": DisasterType.TSUNAMI,
+                "severity_level": SeverityLevel.HIGH,
+                "affected_population": 4900,
+                "contact_person": "Lt. Commander Priya Nair",
+                "contact_phone": "+91-9876543215",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Seismic Triage & Shelter Camp Golf (Earthquake Faultline)",
+                "code": "RC-GOLF",
+                "location_name": "Kutch Rift Zone Sector 9",
+                "latitude": 23.3300,
+                "longitude": 70.3600,
+                "disaster_type": DisasterType.EARTHQUAKE,
+                "severity_level": SeverityLevel.CRITICAL,
+                "affected_population": 19400,
+                "contact_person": "Dr. Sameer Joshi (Field Surgeon)",
+                "contact_phone": "+91-9876543216",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Urban Flood Response Center Hotel (Submerged District)",
+                "code": "RC-HOTEL",
+                "location_name": "Mithi River Drainage Zone 4",
+                "latitude": 19.0760,
+                "longitude": 72.8777,
+                "disaster_type": DisasterType.FLOOD,
+                "severity_level": SeverityLevel.HIGH,
+                "affected_population": 22000,
+                "contact_person": "Chief Officer Meera Deshmukh",
+                "contact_phone": "+91-9876543217",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Wildfire & Evacuation Camp India (Forest Edge Perimeter)",
+                "code": "RC-INDIA",
+                "location_name": "Nilgiri Biosphere Buffer Zone",
+                "latitude": 11.4100,
+                "longitude": 76.6900,
+                "disaster_type": DisasterType.FIRE,
+                "severity_level": SeverityLevel.MEDIUM,
+                "affected_population": 2750,
+                "contact_person": "Forest Range Officer K. Balachandran",
+                "contact_phone": "+91-9876543218",
+                "status": "ACTIVE"
+            },
+            {
+                "name": "Brahmaputra Flood Refuge Camp Juliet (Severe Inundation)",
+                "code": "RC-JULIET",
+                "location_name": "Majuli River Island Camp",
+                "latitude": 26.9500,
+                "longitude": 94.2100,
+                "disaster_type": DisasterType.FLOOD,
+                "severity_level": SeverityLevel.CRITICAL,
+                "affected_population": 14200,
+                "contact_person": "Commander Biren Gogoi",
+                "contact_phone": "+91-9876543219",
+                "status": "ACTIVE"
             }
         ]
 

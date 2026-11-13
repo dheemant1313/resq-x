@@ -372,3 +372,50 @@ def test_available_resources_listing():
     assert "WTR-CAN-01" in skus
     assert "FOD-RAT-01" in skus
     assert "MED-TRM-01" in skus
+
+
+
+# ----------------- 9. RELIEF CENTER REGISTRY: ROLE-GUARDED CREATION & ISOLATION -----------------
+def _login(username, password, role):
+    r = client.post("/api/v1/auth/login", json={"username_or_email": username, "password": password, "role": role})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+NEW_CENTER = {
+    "name": "Test Outpost Kilo",
+    "code": "RC-TEST-KILO",
+    "location_name": "Test Sector",
+    "latitude": 20.0,
+    "longitude": 80.0,
+    "disaster_type": "FLOOD",
+    "severity_level": "HIGH",
+    "affected_population": 1000,
+}
+
+
+def test_relief_center_creation_is_role_guarded():
+    ndrf_headers = _login("dheemant", "dheemant123", "RELIEF_CENTER")
+    op_headers = _login("operator1", "OperatorPass123!", "OPERATOR")
+
+    # NDRF users must NOT be able to create relief centers
+    forbidden = client.post("/api/v1/relief-centers/", json=NEW_CENTER, headers=ndrf_headers)
+    assert forbidden.status_code == 403
+
+    # Operator can create; duplicate code is rejected
+    created = client.post("/api/v1/relief-centers/", json=NEW_CENTER, headers=op_headers)
+    assert created.status_code in (201, 409), created.text
+    dup = client.post("/api/v1/relief-centers/", json=NEW_CENTER, headers=op_headers)
+    assert dup.status_code == 409
+
+    # Operator sees all centers; NDRF sees only its own
+    op_list = client.get("/api/v1/relief-centers/", headers=op_headers).json()
+    assert len(op_list) >= 3
+    ndrf_list = client.get("/api/v1/relief-centers/", headers=ndrf_headers).json()
+    assert [c["id"] for c in ndrf_list] == [1]
+
+    # NDRF cannot read another center by ID
+    assert client.get("/api/v1/relief-centers/2", headers=ndrf_headers).status_code == 403
+
+    # The removed self-service switch endpoint must not exist
+    assert client.post("/api/v1/relief-centers/switch/2", headers=ndrf_headers).status_code in (404, 405)

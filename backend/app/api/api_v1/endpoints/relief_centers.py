@@ -8,10 +8,12 @@ from app.models.user import User
 from app.models.relief_center import ReliefCenter
 from app.schemas.relief_center import (
     ReliefCenterResponse,
-    ReliefCenterUpdate
+    ReliefCenterUpdate,
+    ReliefCenterCreate
 )
 from app.api.deps import (
     get_current_user,
+    require_operator,
     require_relief_center,
     verify_center_access
 )
@@ -69,6 +71,31 @@ def update_my_relief_center(
         if value is not None:
             setattr(center, field, value)
 
+    db.commit()
+    db.refresh(center)
+    return center
+
+@router.post("/", response_model=ReliefCenterResponse, status_code=status.HTTP_201_CREATED)
+def create_relief_center(
+    center_in: ReliefCenterCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_operator)
+) -> Any:
+    """
+    Register a new relief center. Restricted to Operators and Admins —
+    NDRF / Relief Center users cannot create centers.
+    """
+    existing = db.query(ReliefCenter).filter(ReliefCenter.code == center_in.code.upper().strip()).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Relief Center with code '{center_in.code}' already exists."
+        )
+
+    center_data = center_in.model_dump()
+    center_data["code"] = center_data["code"].upper().strip()
+    center = ReliefCenter(**center_data)
+    db.add(center)
     db.commit()
     db.refresh(center)
     return center
