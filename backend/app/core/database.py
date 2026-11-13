@@ -1,3 +1,4 @@
+import os
 import logging
 import socket
 from urllib.parse import urlparse
@@ -6,6 +7,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from app.core.config import settings
 
 logger = logging.getLogger("resqx.database")
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SQLITE_DB_PATH = os.path.join(BACKEND_DIR, "resqx_local.db").replace("\\", "/")
 
 def check_tcp_port(host: str, port: int, timeout: float = 0.5) -> bool:
     """Fast non-blocking TCP socket check to verify database port responsiveness."""
@@ -31,7 +35,7 @@ def get_engine():
             is_listening = check_tcp_port("127.0.0.1", port, timeout=0.5)
             if not is_listening:
                 if settings.USE_SQLITE_FALLBACK:
-                    fallback_url = "sqlite:///./resqx_local.db"
+                    fallback_url = f"sqlite:///{SQLITE_DB_PATH}"
                     logger.warning(
                         f"PostgreSQL server not detected at {host}:{port}. "
                         f"Auto-falling back to persistent local SQLite database ({fallback_url})."

@@ -82,6 +82,7 @@ export default function LoginForm({
       const data = await ApiClient.post<AuthResponse>('/auth/login', {
         username_or_email: emailOrUsername.trim(),
         password: password,
+        role: role,
       });
 
       // Role Enforcement: Never trust frontend role alone, verify DB claim
@@ -107,11 +108,11 @@ export default function LoginForm({
     setError(null);
     setValidationErrors({});
     if (role === 'RELIEF_CENTER') {
-      setEmailOrUsername('coord_alpha');
-      setPassword('Relief@12345');
+      setEmailOrUsername('dheemant');
+      setPassword('dheemant123');
     } else if (role === 'OPERATOR') {
-      setEmailOrUsername('operator1');
-      setPassword('Operator@12345');
+      setEmailOrUsername('dheemant');
+      setPassword('dheemant8147');
     } else if (role === 'ADMIN') {
       setEmailOrUsername('admin');
       setPassword('Admin@12345');
@@ -127,7 +128,7 @@ export default function LoginForm({
       color: 'text-cyan-400',
       borderColor: 'border-cyan-500/40',
       bgGlow: 'bg-cyan-500/10',
-      placeholder: 'coord_alpha or coordinator@camp.gov.in',
+      placeholder: 'dheemant or coordinator@camp.gov.in',
     },
     OPERATOR: {
       title: 'Central Logistics Command',
@@ -137,7 +138,7 @@ export default function LoginForm({
       color: 'text-amber-400',
       borderColor: 'border-amber-500/40',
       bgGlow: 'bg-amber-500/10',
-      placeholder: 'operator1 or operator1@resqx.gov.in',
+      placeholder: 'dheemant or operator1@resqx.gov.in',
     },
     ADMIN: {
       title: 'System Administrator Gateway',
@@ -314,7 +315,13 @@ export default function LoginForm({
           className="text-amber-300 hover:text-amber-200 underline decoration-amber-500/50 hover:decoration-amber-300 flex items-center gap-1 transition-colors"
         >
           <KeyRound size={11} />
-          <span>Load demo credentials ({role === 'RELIEF_CENTER' ? 'coord_alpha' : role === 'OPERATOR' ? 'operator1' : 'admin'})</span>
+          <span>
+            {role === 'RELIEF_CENTER' 
+              ? 'Load credentials (dheemant / dheemant123)' 
+              : role === 'OPERATOR' 
+              ? 'Load credentials (dheemant / dheemant8147)' 
+              : 'Load demo: admin / Admin@12345'}
+          </span>
         </button>
 
         <span className="text-emerald-400 flex items-center gap-1">

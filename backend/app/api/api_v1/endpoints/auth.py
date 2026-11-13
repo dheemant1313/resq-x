@@ -19,12 +19,22 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)) -> Any:
     Authenticate user and issue JWT access token.
     Works for Admin, Operator, and Relief Center roles.
     """
-    user = db.query(User).filter(
+    query = db.query(User).filter(
         (User.username == login_data.username_or_email) | 
         (User.email == login_data.username_or_email)
-    ).first()
+    )
     
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if login_data.role:
+        query = query.filter(User.role == login_data.role)
+        
+    candidates = query.all()
+    user = None
+    for candidate in candidates:
+        if verify_password(login_data.password, candidate.hashed_password):
+            user = candidate
+            break
+    
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username/email or password",

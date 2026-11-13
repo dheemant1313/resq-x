@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     username_or_email: str
     password: str
+    role: Optional[UserRole] = None
 
 class Token(BaseModel):
     access_token: str
