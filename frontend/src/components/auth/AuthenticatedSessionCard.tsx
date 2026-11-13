@@ -1,17 +1,21 @@
-import { CheckCircle2, ShieldCheck, LogOut, ArrowRight, User, Key, Building2 } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, LogOut, ArrowRight, User, Key, Building2, LayoutDashboard } from 'lucide-react';
 import type { AuthResponse } from './types';
 
 interface AuthenticatedSessionCardProps {
   authData: AuthResponse;
   onLogout: () => void;
   onReturnToHome: () => void;
+  onProceedToDashboard?: (authData: AuthResponse) => void;
 }
 
 export default function AuthenticatedSessionCard({
   authData,
   onLogout,
   onReturnToHome,
+  onProceedToDashboard,
 }: AuthenticatedSessionCardProps) {
+  const isNDRF = authData.role === 'RELIEF_CENTER';
+
   return (
     <div className="space-y-4 animate-fadeIn">
       {/* Verified Status Banner */}
@@ -70,12 +74,23 @@ export default function AuthenticatedSessionCard({
         </div>
       </div>
 
-      {/* Development State Notice */}
-      <div className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-800/50 text-[11px] text-cyan-200 font-sans leading-relaxed">
-        <strong>Phase 3 Milestone Completed:</strong> Real backend JWT authentication verified. In Phase 4, this authenticated session will transition directly to the live <strong>{authData.role === 'RELIEF_CENTER' ? 'NDRF Requisition Portal' : 'Central Operator Command Dashboard'}</strong>.
-      </div>
+      {/* Primary Dashboard Launch Action */}
+      {isNDRF && onProceedToDashboard ? (
+        <button
+          onClick={() => onProceedToDashboard(authData)}
+          className="btn btn-amber w-full text-xs font-mono !py-3 flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(249,115,22,0.4)]"
+        >
+          <LayoutDashboard size={15} />
+          <span>PROCEED TO NDRF RELIEF CENTER DASHBOARD</span>
+          <ArrowRight size={15} />
+        </button>
+      ) : (
+        <div className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-800/50 text-[11px] text-cyan-200 font-sans leading-relaxed">
+          Logged in as <strong>{authData.role}</strong>. Proceed to central operations.
+        </div>
+      )}
 
-      {/* Action Buttons */}
+      {/* Auxiliary Actions */}
       <div className="flex gap-2 pt-1">
         <button
           onClick={onLogout}
@@ -86,10 +101,9 @@ export default function AuthenticatedSessionCard({
         </button>
         <button
           onClick={onReturnToHome}
-          className="btn btn-amber flex-1 text-xs font-mono !py-2.5 flex items-center justify-center gap-1.5"
+          className="btn flex-1 text-xs font-mono !py-2.5 flex items-center justify-center gap-1.5 border-slate-700"
         >
           <span>HOME OVERVIEW</span>
-          <ArrowRight size={14} />
         </button>
       </div>
     </div>

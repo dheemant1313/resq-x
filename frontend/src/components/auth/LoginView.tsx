@@ -21,6 +21,7 @@ import AuthenticatedSessionCard from './AuthenticatedSessionCard';
 interface LoginViewProps {
   onReplayCinematic?: () => void;
   onReturnToHome: () => void;
+  onProceedToDashboard?: (authData: AuthResponse) => void;
 }
 
 // ----------------- PROCEDURAL CANVAS ENGINE CONSTANTS -----------------
@@ -197,7 +198,7 @@ function buildScene(W: number, H: number) {
 
 type SceneType = ReturnType<typeof buildScene>;
 
-export function LoginView({ onReturnToHome }: LoginViewProps) {
+export function LoginView({ onReturnToHome, onProceedToDashboard }: LoginViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const card = useRef<HTMLDivElement>(null);
@@ -1047,6 +1048,7 @@ export function LoginView({ onReturnToHome }: LoginViewProps) {
                 authData={authData}
                 onLogout={handleLogout}
                 onReturnToHome={onReturnToHome}
+                onProceedToDashboard={onProceedToDashboard}
               />
             ) : authStage === 'register_ndrf' ? (
               <NDRFRegisterForm

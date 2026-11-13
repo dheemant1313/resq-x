@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 import ProblemSolutionSection from './components/ProblemSolutionSection';
@@ -10,9 +10,12 @@ import TechnologySection from './components/TechnologySection';
 import AboutSection from './components/AboutSection';
 import Footer from './components/Footer';
 import { LoginView } from './components/auth/LoginView';
+import NDRFDashboardLayout from './components/dashboard/ndrf/NDRFDashboardLayout';
 import { useLenis } from './hooks/useLenis';
+import { ApiClient } from './services/api';
+import type { AuthResponse } from './components/auth/types';
 
-type AppViewMode = 'landing' | 'login';
+type AppViewMode = 'landing' | 'login' | 'ndrf_dashboard';
 
 export function App() {
   // Initialize Lenis smooth scroll engine for landing page
@@ -20,10 +23,39 @@ export function App() {
 
   // Active view state
   const [viewMode, setViewMode] = useState<AppViewMode>('landing');
+  const [currentUser, setCurrentUser] = useState<AuthResponse | null>(null);
 
-  // Launch login experience with the complete realistic rescue simulation
+  // Restore authenticated session if valid token exists on mount
+  useEffect(() => {
+    async function restoreSession() {
+      const token = ApiClient.getToken();
+      if (!token) return;
+
+      try {
+        const user = await ApiClient.get<any>('/auth/me');
+        const authData: AuthResponse = {
+          access_token: token,
+          token_type: 'bearer',
+          role: user.role,
+          username: user.username,
+          center_id: user.center_id,
+        };
+        setCurrentUser(authData);
+      } catch {
+        ApiClient.clearSession();
+        setCurrentUser(null);
+      }
+    }
+    restoreSession();
+  }, []);
+
+  // Launch login experience
   const handleLaunchLogin = () => {
-    setViewMode('login');
+    if (currentUser?.role === 'RELIEF_CENTER') {
+      setViewMode('ndrf_dashboard');
+    } else {
+      setViewMode('login');
+    }
   };
 
   // Return to landing page
@@ -31,14 +63,41 @@ export function App() {
     setViewMode('landing');
   };
 
+  // Transition from login to appropriate dashboard
+  const handleProceedToDashboard = (authData: AuthResponse) => {
+    setCurrentUser(authData);
+    if (authData.role === 'RELIEF_CENTER') {
+      setViewMode('ndrf_dashboard');
+    }
+  };
+
+  // Logout from dashboard
+  const handleDashboardLogout = async () => {
+    await ApiClient.logout();
+    setCurrentUser(null);
+    setViewMode('landing');
+  };
+
   return (
     <>
-      {/* ----------------- VIEW 1: FULL REALISTIC RESCUE LOGIN EXPERIENCE ----------------- */}
-      {viewMode === 'login' && (
-        <LoginView onReturnToHome={handleReturnToLanding} />
+      {/* ----------------- VIEW 1: NDRF / RELIEF CENTER DASHBOARD ----------------- */}
+      {viewMode === 'ndrf_dashboard' && currentUser && (
+        <NDRFDashboardLayout
+          currentUser={currentUser}
+          onLogout={handleDashboardLogout}
+          onReturnToHome={handleReturnToLanding}
+        />
       )}
 
-      {/* ----------------- VIEW 2: FULL PUBLIC LANDING PAGE ----------------- */}
+      {/* ----------------- VIEW 2: FULL REALISTIC RESCUE LOGIN EXPERIENCE ----------------- */}
+      {viewMode === 'login' && (
+        <LoginView
+          onReturnToHome={handleReturnToLanding}
+          onProceedToDashboard={handleProceedToDashboard}
+        />
+      )}
+
+      {/* ----------------- VIEW 3: FULL PUBLIC LANDING PAGE ----------------- */}
       {viewMode === 'landing' && (
         <div className="min-h-screen bg-command-950 text-slate-100 flex flex-col selection:bg-emergency-orange selection:text-white font-sans antialiased relative">
           {/* SECTION 1 — Tactical Navbar with Live Status */}

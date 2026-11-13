@@ -6,9 +6,9 @@ from app.models.user import (
     BlacklistedToken,
     PasswordResetToken
 )
-from app.models.relief_center import ReliefCenter
+from app.models.relief_center import ReliefCenter, DisasterType, SeverityLevel
 from app.models.inventory import ResourceItem, ResourceCategory
-from app.models.request import ResourceRequest, RequestItem, RequestStatus
+from app.models.request import ResourceRequest, RequestItem, RequestStatus, UrgencyLevel
 from app.models.allocation import AllocationLog
 from app.models.route import RoadNetworkNode, RoadNetworkEdge, DispatchRoute
 
@@ -20,11 +20,14 @@ __all__ = [
     "BlacklistedToken",
     "PasswordResetToken",
     "ReliefCenter",
+    "DisasterType",
+    "SeverityLevel",
     "ResourceItem",
     "ResourceCategory",
     "ResourceRequest",
     "RequestItem",
     "RequestStatus",
+    "UrgencyLevel",
     "AllocationLog",
     "RoadNetworkNode",
     "RoadNetworkEdge",

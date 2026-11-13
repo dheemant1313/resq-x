@@ -6,10 +6,12 @@ from app.core.database import Base
 
 class RequestStatus(str, Enum):
     PENDING = "PENDING"
-    APPROVED = "APPROVED"
+    UNDER_REVIEW = "UNDER_REVIEW"
     PARTIALLY_APPROVED = "PARTIALLY_APPROVED"
+    APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     DISPATCHED = "DISPATCHED"
+    COMPLETED = "COMPLETED"
     DELIVERED = "DELIVERED"
 
 class UrgencyLevel(str, Enum):
@@ -28,6 +30,12 @@ class ResourceRequest(Base):
     status = Column(SQLEnum(RequestStatus), default=RequestStatus.PENDING, nullable=False)
     urgency_level = Column(SQLEnum(UrgencyLevel), default=UrgencyLevel.HIGH, nullable=False)
     affected_count = Column(Integer, default=0, nullable=False)
+    num_families = Column(Integer, default=0, nullable=True)
+    children_elderly_count = Column(Integer, default=0, nullable=True)
+    medical_assistance_count = Column(Integer, default=0, nullable=True)
+    disaster_type = Column(String(50), default="FLOOD", nullable=True)
+    disaster_severity = Column(String(50), default="HIGH", nullable=True)
+    affected_location = Column(String(255), nullable=True)
     special_instructions = Column(Text, nullable=True)
     operator_notes = Column(Text, nullable=True)
     
@@ -36,7 +44,7 @@ class ResourceRequest(Base):
 
     # Relationships
     relief_center = relationship("ReliefCenter", back_populates="requests")
-    items = relationship("RequestItem", back_populates="request", cascade="all, delete-orphan")
+    items = relationship("RequestItem", back_populates="request", cascade="all, delete-orphan", lazy="joined")
     allocations = relationship("AllocationLog", back_populates="request", cascade="all, delete-orphan")
     routes = relationship("DispatchRoute", back_populates="request")
 
@@ -53,4 +61,4 @@ class RequestItem(Base):
     
     # Relationships
     request = relationship("ResourceRequest", back_populates="items")
-    resource = relationship("ResourceItem", back_populates="request_items")
+    resource = relationship("ResourceItem", back_populates="request_items", lazy="joined")

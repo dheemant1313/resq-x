@@ -32,7 +32,7 @@ class SimpleRateLimiter:
 
 auth_rate_limiter = SimpleRateLimiter(max_requests=25, window_seconds=60)
 
-async def check_auth_rate_limit(request: Request):
+def check_auth_rate_limit(request: Request):
     """
     FastAPI dependency to rate-limit authentication endpoints.
     Identifies client by client host IP address.
