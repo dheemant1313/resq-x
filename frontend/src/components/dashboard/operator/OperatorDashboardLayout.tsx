@@ -27,7 +27,8 @@ import type {
   ResourceItem, 
   LowStockAlert, 
   AllocationLogRecord, 
-  NotificationRecord 
+  NotificationRecord,
+  ReliefCenterRecord
 } from './types';
 import type { AuthResponse } from '../../auth/types';
 
@@ -77,6 +78,7 @@ export default function OperatorDashboardLayout({
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [auditLogs, setAuditLogs] = useState<AllocationLogRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [reliefCenters, setReliefCenters] = useState<ReliefCenterRecord[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequisitionRecord | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -86,13 +88,14 @@ export default function OperatorDashboardLayout({
   const fetchAllData = useCallback(async (isSilent = false) => {
     if (!isSilent) setRefreshing(true);
     try {
-      const [statsData, reqsData, invData, alertsData, logsData, notifsData] = await Promise.all([
+      const [statsData, reqsData, invData, alertsData, logsData, notifsData, centersData] = await Promise.all([
         ApiClient.get<OperatorKPIs>('/requests/stats'),
         ApiClient.get<RequisitionRecord[]>('/requests/'),
         ApiClient.get<ResourceItem[]>('/resources/'),
         ApiClient.get<LowStockAlert[]>('/resources/alerts/low-stock').catch(() => []),
         ApiClient.get<AllocationLogRecord[]>('/requests/allocations/audit-logs').catch(() => []),
         ApiClient.get<NotificationRecord[]>('/notifications/').catch(() => []),
+        ApiClient.get<ReliefCenterRecord[]>('/relief-centers/').catch(() => []),
       ]);
 
       setKpis(statsData);
@@ -101,6 +104,7 @@ export default function OperatorDashboardLayout({
       setLowStockAlerts(alertsData);
       setAuditLogs(logsData);
       setNotifications(notifsData);
+      setReliefCenters(centersData);
     } catch (err) {
       console.warn('Operator dashboard data sync error:', err);
     } finally {
@@ -410,6 +414,7 @@ export default function OperatorDashboardLayout({
                 <OperatorRequestsView
                   requisitions={requisitions}
                   inventory={inventory}
+                  reliefCenters={reliefCenters}
                   selectedRequest={selectedRequest}
                   onSelectRequest={setSelectedRequest}
                   onRefresh={() => fetchAllData()}

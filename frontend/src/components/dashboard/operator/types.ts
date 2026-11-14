@@ -149,6 +149,20 @@ export interface NotificationRecord {
   created_at: string;
 }
 
+export interface ReliefCenterRecord {
+  id: number;
+  name: string;
+  code: string;
+  location_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  capacity?: number | null;
+  current_occupancy?: number | null;
+  status?: string | null;
+}
+
 export interface ItemAllocationInput {
   request_item_id: number;
   approved_qty: number;
