@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.models.request import ResourceRequest, RequestStatus
+from app.models.relief_center import ReliefCenter
 from app.schemas.algorithm import (
     KnapsackRequest,
     KnapsackResponse,
@@ -20,6 +22,55 @@ from app.algorithms.dijkstra import solve_dijkstra_shortest_path
 from app.algorithms.allocation_engine import allocate_inventory_stock, CenterDemand
 
 router = APIRouter()
+
+@router.get("/knapsack/approved-consignments")
+def get_approved_consignments_for_packing(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Fetches approved and partially approved requisitions with their allocated items
+    for vehicle capacity optimization. Read-only preview endpoint.
+    """
+    consignments = (
+        db.query(ResourceRequest)
+        .filter(ResourceRequest.status.in_([RequestStatus.APPROVED, RequestStatus.PARTIALLY_APPROVED]))
+        .order_by(ResourceRequest.updated_at.desc())
+        .all()
+    )
+    results = []
+    for c in consignments:
+        allocated_items = []
+        for itm in c.items:
+            qty = itm.approved_qty if itm.approved_qty > 0 else itm.requested_qty
+            if qty > 0 and itm.resource:
+                allocated_items.append({
+                    "id": str(itm.resource.id),
+                    "resource_id": itm.resource.id,
+                    "sku": itm.resource.sku,
+                    "name": itm.resource.name,
+                    "category": itm.resource.category.value if hasattr(itm.resource.category, 'value') else str(itm.resource.category),
+                    "unit": itm.resource.unit,
+                    "weight_kg": float(itm.resource.weight_per_unit_kg),
+                    "priority_score": int(itm.resource.priority_score),
+                    "quantity": qty,
+                    "approved_qty": itm.approved_qty,
+                    "requested_qty": itm.requested_qty
+                })
+        
+        results.append({
+            "id": c.id,
+            "request_number": c.request_number,
+            "center_id": c.center_id,
+            "center_name": c.relief_center.name if c.relief_center else f"Center #{c.center_id}",
+            "center_code": c.relief_center.code if c.relief_center else f"RC-{c.center_id}",
+            "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
+            "disaster_type": c.disaster_type,
+            "disaster_severity": c.disaster_severity,
+            "affected_location": c.affected_location,
+            "items": allocated_items
+        })
+    return results
 
 @router.post("/knapsack", response_model=KnapsackResponse)
 def execute_knapsack_optimization(

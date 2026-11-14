@@ -12,12 +12,14 @@ import {
   VolumeX, 
   Menu, 
   X, 
-  RefreshCw
+  RefreshCw,
+  Truck
 } from 'lucide-react';
 import { ApiClient } from '../../../services/api';
 import OperatorOverviewView from './OperatorOverviewView';
 import OperatorRequestsView from './OperatorRequestsView';
 import OperatorInventoryView from './OperatorInventoryView';
+import OperatorKnapsackView from './OperatorKnapsackView';
 import OperatorAuditLogView from './OperatorAuditLogView';
 import OperatorNotificationsDrawer from './OperatorNotificationsDrawer';
 import type { 
@@ -155,6 +157,11 @@ export default function OperatorDashboardLayout({
       icon: Boxes,
       badge: lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined,
       badgeColor: 'bg-red-500' 
+    },
+    { 
+      id: 'knapsack', 
+      label: 'Vehicle Payload (DP)', 
+      icon: Truck 
     },
     { id: 'audit_log', label: 'Allocation Audit Trail', icon: ShieldCheck },
   ];
@@ -427,6 +434,10 @@ export default function OperatorDashboardLayout({
                   lowStockAlerts={lowStockAlerts}
                   onRefresh={() => fetchAllData()}
                 />
+              )}
+
+              {activeTab === 'knapsack' && (
+                <OperatorKnapsackView inventory={inventory} />
               )}
 
               {activeTab === 'audit_log' && (

@@ -5,17 +5,17 @@ from pydantic import BaseModel, Field
 class KnapsackItemInput(BaseModel):
     id: str
     name: str
-    weight_kg: float = Field(..., gt=0)
-    priority_score: int = Field(..., ge=1, le=100)
-    quantity: int = Field(1, ge=1)
+    weight_kg: float
+    priority_score: int
+    quantity: int = 1
     category: Optional[str] = None
 
 class KnapsackRequest(BaseModel):
     vehicle_id: Optional[str] = "TRK-01"
     vehicle_name: Optional[str] = "NDRF Heavy Response Truck"
-    capacity_kg: float = Field(..., gt=0)
-    items: List[KnapsackItemInput] = Field(..., min_length=1)
-    include_dp_table: bool = False
+    capacity_kg: float
+    items: List[KnapsackItemInput] = Field(default_factory=list)
+    include_dp_table: bool = True
 
 class KnapsackItemOutput(BaseModel):
     id: str
@@ -24,16 +24,32 @@ class KnapsackItemOutput(BaseModel):
     priority_score: int
     category: Optional[str] = None
 
+class KnapsackGroupSummary(BaseModel):
+    id: str
+    name: str
+    category: Optional[str] = None
+    unit_weight_kg: float
+    priority_score: int
+    available_qty: int
+    selected_qty: int
+    total_weight_kg: float
+    total_priority: int
+
 class KnapsackResponse(BaseModel):
     vehicle_id: str
     vehicle_name: str
     capacity_kg: float
     total_weight_kg: float
+    remaining_capacity_kg: float
     total_priority_score: int
     utilization_percentage: float
     selected_items: List[KnapsackItemOutput]
     unselected_items: List[KnapsackItemOutput]
+    grouped_summary: List[KnapsackGroupSummary] = []
+    dp_explanation: Dict[str, Any] = {}
+    step_by_step_trace: List[Dict[str, Any]] = []
     dp_matrix_sample: Optional[List[List[int]]] = None
+    matrix_headers: Optional[Dict[str, Any]] = None
     execution_time_ms: float
     algorithm: str = "0/1 Knapsack Dynamic Programming with Backtracking"
 

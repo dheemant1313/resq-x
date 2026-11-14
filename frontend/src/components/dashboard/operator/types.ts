@@ -1,4 +1,4 @@
-export type OperatorNavTab = 'overview' | 'requests' | 'inventory' | 'audit_log';
+export type OperatorNavTab = 'overview' | 'requests' | 'inventory' | 'knapsack' | 'audit_log';
 
 export type DisasterType = 'FLOOD' | 'CYCLONE' | 'EARTHQUAKE' | 'LANDSLIDE' | 'TSUNAMI' | 'FIRE' | 'OTHER';
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -172,4 +172,97 @@ export interface AllocationActionPayload {
   action: RequestStatus;
   allocations: ItemAllocationInput[];
   operator_notes?: string;
+}
+
+export interface KnapsackItemInputDTO {
+  id: string;
+  name: string;
+  weight_kg: number;
+  priority_score: number;
+  quantity: number;
+  category?: string;
+}
+
+export interface KnapsackRequestDTO {
+  vehicle_id?: string;
+  vehicle_name?: string;
+  capacity_kg: number;
+  items: KnapsackItemInputDTO[];
+  include_dp_table?: boolean;
+}
+
+export interface KnapsackItemOutputDTO {
+  id: string;
+  name: string;
+  weight_kg: number;
+  priority_score: number;
+  category?: string;
+}
+
+export interface KnapsackGroupSummaryDTO {
+  id: string;
+  name: string;
+  category?: string;
+  unit_weight_kg: number;
+  priority_score: number;
+  available_qty: number;
+  selected_qty: number;
+  total_weight_kg: number;
+  total_priority: number;
+}
+
+export interface KnapsackResponseDTO {
+  vehicle_id: string;
+  vehicle_name: string;
+  capacity_kg: number;
+  total_weight_kg: number;
+  remaining_capacity_kg: number;
+  total_priority_score: number;
+  utilization_percentage: number;
+  selected_items: KnapsackItemOutputDTO[];
+  unselected_items: KnapsackItemOutputDTO[];
+  grouped_summary: KnapsackGroupSummaryDTO[];
+  dp_explanation: Record<string, any>;
+  step_by_step_trace: Array<{
+    step: number;
+    item_id: string;
+    name: string;
+    weight_kg: number;
+    priority_score: number;
+    decision: 'INCLUDED' | 'EXCLUDED';
+    reason: string;
+    capacity_after_kg: number;
+  }>;
+  dp_matrix_sample?: number[][];
+  matrix_headers?: {
+    row_labels: string[];
+    col_weights: number[];
+  };
+  execution_time_ms: number;
+  algorithm: string;
+}
+
+export interface ApprovedConsignmentDTO {
+  id: number;
+  request_number: string;
+  center_id: number;
+  center_name: string;
+  center_code: string;
+  status: string;
+  disaster_type?: string;
+  disaster_severity?: string;
+  affected_location?: string;
+  items: Array<{
+    id: string;
+    resource_id: number;
+    sku: string;
+    name: string;
+    category: string;
+    unit: string;
+    weight_kg: number;
+    priority_score: number;
+    quantity: number;
+    approved_qty: number;
+    requested_qty: number;
+  }>;
 }
