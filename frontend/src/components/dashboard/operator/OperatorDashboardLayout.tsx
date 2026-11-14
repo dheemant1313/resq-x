@@ -13,13 +13,15 @@ import {
   Menu, 
   X, 
   RefreshCw,
-  Truck
+  Truck,
+  Route
 } from 'lucide-react';
 import { ApiClient } from '../../../services/api';
 import OperatorOverviewView from './OperatorOverviewView';
 import OperatorRequestsView from './OperatorRequestsView';
 import OperatorInventoryView from './OperatorInventoryView';
 import OperatorKnapsackView from './OperatorKnapsackView';
+import OperatorRouteMapView from './OperatorRouteMapView';
 import OperatorAuditLogView from './OperatorAuditLogView';
 import OperatorNotificationsDrawer from './OperatorNotificationsDrawer';
 import type { 
@@ -162,6 +164,11 @@ export default function OperatorDashboardLayout({
       id: 'knapsack', 
       label: 'Vehicle Payload (DP)', 
       icon: Truck 
+    },
+    { 
+      id: 'routes', 
+      label: 'Disaster Routing (Dijkstra)', 
+      icon: Route 
     },
     { id: 'audit_log', label: 'Allocation Audit Trail', icon: ShieldCheck },
   ];
@@ -438,6 +445,10 @@ export default function OperatorDashboardLayout({
 
               {activeTab === 'knapsack' && (
                 <OperatorKnapsackView inventory={inventory} />
+              )}
+
+              {activeTab === 'routes' && (
+                <OperatorRouteMapView />
               )}
 
               {activeTab === 'audit_log' && (

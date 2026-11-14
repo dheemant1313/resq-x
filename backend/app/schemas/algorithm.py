@@ -59,9 +59,11 @@ class DijkstraNodeInput(BaseModel):
     name: str
     latitude: float
     longitude: float
-    node_type: str = "WAYPOINT"
+    node_type: str = "WAYPOINT"  # CENTRAL_DEPOT, RELIEF_CENTER, WAYPOINT, BRIDGE, MOUNTAIN_PASS, HOSPITAL
+    description: Optional[str] = None
 
 class DijkstraEdgeInput(BaseModel):
+    id: Optional[str] = None
     source: str
     target: str
     distance_km: float = Field(..., gt=0)
@@ -69,6 +71,7 @@ class DijkstraEdgeInput(BaseModel):
     is_blocked: bool = False
     risk_factor: float = Field(1.0, ge=1.0)
     road_name: Optional[str] = None
+    road_type: Optional[str] = "HIGHWAY"
 
 class DijkstraGraphInput(BaseModel):
     nodes: List[DijkstraNodeInput]
@@ -78,22 +81,48 @@ class DijkstraRequest(BaseModel):
     start_node: str
     end_node: str
     avoid_high_risk: bool = False
+    metric: str = "weighted"  # "weighted" (distance * condition * risk) or "distance" (pure physical km)
+    include_step_trace: bool = True
+    compare_with_fewest_edges: bool = False
     graph: Optional[DijkstraGraphInput] = None
 
 class DijkstraStepLog(BaseModel):
-    node: str
-    current_distance: float
-    predecessor: Optional[str]
+    step_num: int
+    popped_node: str
+    current_cost: float
+    action: str
+    relaxed_node: Optional[str] = None
+    tentative_cost: Optional[float] = None
+    detail: str
+
+class AlternativeRouteComparison(BaseModel):
+    algorithm_name: str
+    path: List[str]
+    total_edges: int
+    total_distance_km: float
+    total_weighted_cost: float
+    explanation: str
 
 class DijkstraResponse(BaseModel):
     start_node: str
     end_node: str
     is_reachable: bool
     path: List[str]
-    path_details: List[Dict[str, Any]]
+    path_coordinates: List[List[float]] = []  # [[lat, lng], [lat, lng], ...]
+    path_details: List[Dict[str, Any]] = []
     total_distance_km: float
     total_weighted_cost: float
     estimated_duration_minutes: float
     algorithm: str = "Dijkstra Shortest Path with Min-Heap Priority Queue"
     execution_time_ms: float
+    visited_nodes_count: int = 0
     hazard_warnings: List[str] = []
+    step_by_step_trace: List[Dict[str, Any]] = []
+    alternative_route_comparison: Optional[AlternativeRouteComparison] = None
+    disclaimer: str = "SIMULATED DISASTER ROAD NETWORK — Not a certified live emergency evacuation route. Travel costs and conditions are algorithmic estimates for triage and tactical vehicle dispatch."
+
+class RoadStatusUpdate(BaseModel):
+    is_blocked: bool
+    condition_multiplier: Optional[float] = Field(None, ge=1.0)
+    risk_factor: Optional[float] = Field(None, ge=1.0)
+    operator_notes: Optional[str] = None

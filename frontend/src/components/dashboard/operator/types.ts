@@ -1,4 +1,4 @@
-export type OperatorNavTab = 'overview' | 'requests' | 'inventory' | 'knapsack' | 'audit_log';
+export type OperatorNavTab = 'overview' | 'requests' | 'inventory' | 'knapsack' | 'routes' | 'audit_log';
 
 export type DisasterType = 'FLOOD' | 'CYCLONE' | 'EARTHQUAKE' | 'LANDSLIDE' | 'TSUNAMI' | 'FIRE' | 'OTHER';
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -266,3 +266,110 @@ export interface ApprovedConsignmentDTO {
     requested_qty: number;
   }>;
 }
+
+// ----------------- PHASE 8: DIJKSTRA ROUTE OPTIMIZATION TYPES -----------------
+
+export interface DijkstraNodeDTO {
+  code: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  node_type: string;
+  description?: string;
+}
+
+export interface DijkstraEdgeDTO {
+  id?: string;
+  source: string;
+  target: string;
+  distance_km: number;
+  condition_multiplier: number;
+  is_blocked: boolean;
+  risk_factor: number;
+  road_name?: string;
+  road_type?: string;
+}
+
+export interface DijkstraGraphDTO {
+  nodes: DijkstraNodeDTO[];
+  edges: DijkstraEdgeDTO[];
+}
+
+export interface DijkstraRequestDTO {
+  start_node: string;
+  end_node: string;
+  avoid_high_risk?: boolean;
+  metric?: 'weighted' | 'distance';
+  include_step_trace?: boolean;
+  compare_with_fewest_edges?: boolean;
+  graph?: DijkstraGraphDTO;
+}
+
+export interface DijkstraStepTraceDTO {
+  step_num: number;
+  popped_node: string;
+  node_name?: string;
+  current_cost: number;
+  action: string;
+  relaxed_node?: string;
+  tentative_cost?: number;
+  detail: string;
+}
+
+export interface AlternativeRouteComparisonDTO {
+  algorithm_name: string;
+  path: string[];
+  total_edges: number;
+  total_distance_km: number;
+  total_weighted_cost: number;
+  explanation: string;
+}
+
+export interface DijkstraPathDetailDTO {
+  from_node: string;
+  to_node: string;
+  from_name: string;
+  to_name: string;
+  road_name: string;
+  road_type: string;
+  distance_km: number;
+  condition_multiplier: number;
+  risk_factor: number;
+  estimated_speed_kmh: number;
+  segment_time_mins: number;
+  hazard_warning?: string;
+}
+
+export interface DijkstraResponseDTO {
+  start_node: string;
+  end_node: string;
+  is_reachable: boolean;
+  path: string[];
+  path_coordinates: [number, number][];
+  path_details: DijkstraPathDetailDTO[];
+  total_distance_km: number;
+  total_weighted_cost: number;
+  estimated_duration_minutes: number;
+  algorithm: string;
+  execution_time_ms: number;
+  visited_nodes_count: number;
+  hazard_warnings: string[];
+  step_by_step_trace: DijkstraStepTraceDTO[];
+  alternative_route_comparison?: AlternativeRouteComparisonDTO | null;
+  disclaimer: string;
+}
+
+export interface DijkstraBenchmarkDTO {
+  id: string;
+  title: string;
+  description: string;
+  start_node: string;
+  end_node: string;
+  metric: 'weighted' | 'distance';
+  avoid_high_risk: boolean;
+  compare_with_fewest_edges: boolean;
+  setup_action?: {
+    block_road_ids?: string[];
+  };
+}
+

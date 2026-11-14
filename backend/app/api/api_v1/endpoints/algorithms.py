@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.request import ResourceRequest, RequestStatus
 from app.models.relief_center import ReliefCenter
+from app.core.security import UserRole
 from app.schemas.algorithm import (
     KnapsackRequest,
     KnapsackResponse,
@@ -15,10 +16,12 @@ from app.schemas.algorithm import (
     DijkstraResponse,
     DijkstraGraphInput,
     DijkstraNodeInput,
-    DijkstraEdgeInput
+    DijkstraEdgeInput,
+    RoadStatusUpdate
 )
 from app.algorithms.knapsack import solve_01_knapsack
 from app.algorithms.dijkstra import solve_dijkstra_shortest_path
+from app.algorithms.road_network import network_manager, BENCHMARK_SCENARIOS
 from app.algorithms.allocation_engine import allocate_inventory_stock, CenterDemand
 
 router = APIRouter()
@@ -96,50 +99,139 @@ def execute_knapsack_optimization(
             detail=f"Knapsack DP computation error: {str(e)}"
         )
 
+# ----------------- PHASE 8: DIJKSTRA ROUTING ENDPOINTS -----------------
+
+@router.get("/dijkstra/network", response_model=DijkstraGraphInput)
+def get_disaster_road_network(
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Retrieves the active disaster road network including all junctions,
+    relief centers, road segments, surface conditions, and blocked statuses.
+    """
+    return network_manager.get_graph()
+
+@router.get("/dijkstra/benchmarks")
+def get_dijkstra_viva_benchmarks(
+    _current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Returns curated academic and viva benchmark test scenarios:
+    - Shortest Weighted vs Fewest-Edges (Dijkstra != BFS)
+    - Dynamic Mountain Landslide Reroute
+    - Island Flood Isolation (Unreachable Destination)
+    - Disaster Hazard Penalty Shift
+    - Same Origin & Destination
+    """
+    return BENCHMARK_SCENARIOS
+
+@router.post("/dijkstra/route", response_model=DijkstraResponse)
 @router.post("/dijkstra", response_model=DijkstraResponse)
 def execute_dijkstra_routing(
     payload: DijkstraRequest,
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """
-    Computes the disaster-aware optimal route between nodes using Dijkstra's algorithm
-    with Min-Heap Priority Queue, factoring in road conditions, hazard multipliers, and blocked passes.
+    Computes the shortest disaster route using Dijkstra's algorithm with Min-Heap Priority Queue.
+    Evaluates road surface conditions, dynamic blockages, and hazard multipliers.
     """
-    if not payload.graph:
-        # Provide default high-fidelity disaster grid demo if none passed
-        default_nodes = [
-            DijkstraNodeInput(code="DEPOT_CENTRAL", name="Central NDRF Warehouse Depot", latitude=19.0760, longitude=72.8777, node_type="CENTRAL_DEPOT"),
-            DijkstraNodeInput(code="WAYPOINT_NORTH", name="Highway Junction Sector 4", latitude=19.1136, longitude=72.8697, node_type="WAYPOINT"),
-            DijkstraNodeInput(code="WAYPOINT_EAST", name="Eastern Bypass Bridge", latitude=19.0896, longitude=72.9080, node_type="WAYPOINT"),
-            DijkstraNodeInput(code="WAYPOINT_SOUTH", name="Southern Transit Hub", latitude=19.0330, longitude=72.8570, node_type="WAYPOINT"),
-            DijkstraNodeInput(code="RELIEF_CAMP_A", name="Relief Camp Alpha (Flooded)", latitude=19.1663, longitude=72.8526, node_type="RELIEF_CENTER"),
-            DijkstraNodeInput(code="RELIEF_CAMP_B", name="Relief Camp Bravo (Landslide Base)", latitude=19.1410, longitude=72.9300, node_type="RELIEF_CENTER")
-        ]
-        default_edges = [
-            DijkstraEdgeInput(source="DEPOT_CENTRAL", target="WAYPOINT_NORTH", distance_km=6.5, condition_multiplier=1.0, is_blocked=False, risk_factor=1.0, road_name="NH-48 Corridor"),
-            DijkstraEdgeInput(source="DEPOT_CENTRAL", target="WAYPOINT_EAST", distance_km=5.2, condition_multiplier=1.8, is_blocked=False, risk_factor=2.0, road_name="Eastern Ring Road"),
-            DijkstraEdgeInput(source="DEPOT_CENTRAL", target="WAYPOINT_SOUTH", distance_km=7.0, condition_multiplier=1.0, is_blocked=False, risk_factor=1.0, road_name="South Express Way"),
-            DijkstraEdgeInput(source="WAYPOINT_NORTH", target="RELIEF_CAMP_A", distance_km=8.1, condition_multiplier=2.2, is_blocked=False, risk_factor=3.0, road_name="Northern Inundation Pass"),
-            DijkstraEdgeInput(source="WAYPOINT_NORTH", target="WAYPOINT_EAST", distance_km=4.8, condition_multiplier=1.2, is_blocked=False, risk_factor=1.1, road_name="Cross Connector Link"),
-            DijkstraEdgeInput(source="WAYPOINT_EAST", target="RELIEF_CAMP_B", distance_km=9.0, condition_multiplier=1.0, is_blocked=False, risk_factor=1.5, road_name="Hillside Access Road"),
-            DijkstraEdgeInput(source="WAYPOINT_SOUTH", target="RELIEF_CAMP_B", distance_km=14.5, condition_multiplier=1.1, is_blocked=False, risk_factor=1.0, road_name="Southern Peripheral Highway")
-        ]
-        graph = DijkstraGraphInput(nodes=default_nodes, edges=default_edges)
-    else:
-        graph = payload.graph
+    graph = payload.graph if payload.graph else network_manager.get_graph()
 
     try:
         result = solve_dijkstra_shortest_path(
             graph_input=graph,
             start_node=payload.start_node,
             end_node=payload.end_node,
-            avoid_high_risk=payload.avoid_high_risk
+            avoid_high_risk=payload.avoid_high_risk,
+            metric=payload.metric or "weighted",
+            include_step_trace=payload.include_step_trace,
+            compare_with_fewest_edges=payload.compare_with_fewest_edges
         )
         return result
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Dijkstra calculation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Dijkstra calculation error: {str(e)}"
+        )
+
+@router.patch("/dijkstra/roads/{road_id}/toggle")
+def toggle_road_closure(
+    road_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Toggles the blocked status of a road corridor.
+    RBAC: Restricted to authorized Central Operators and Admins.
+    """
+    if current_user.role not in [UserRole.OPERATOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Only Central Logistics Operators and Admins can report or clear road closures."
+        )
+
+    updated_edge = network_manager.toggle_road_block(road_id=road_id)
+    if not updated_edge:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Road corridor with ID '{road_id}' not found in active network."
+        )
+    return {
+        "message": f"Road {road_id} ({updated_edge.road_name}) is now {'BLOCKED' if updated_edge.is_blocked else 'OPEN'}.",
+        "road": updated_edge
+    }
+
+@router.patch("/dijkstra/roads/{road_id}/status")
+def update_road_attributes(
+    road_id: str,
+    payload: RoadStatusUpdate,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Updates road attributes (closure, surface degradation multiplier, risk factor).
+    RBAC: Restricted to authorized Central Operators and Admins.
+    """
+    if current_user.role not in [UserRole.OPERATOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Only Central Logistics Operators and Admins can modify road network parameters."
+        )
+
+    updated_edge = network_manager.update_road_attributes(
+        road_id=road_id,
+        is_blocked=payload.is_blocked,
+        condition_multiplier=payload.condition_multiplier,
+        risk_factor=payload.risk_factor
+    )
+    if not updated_edge:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Road corridor with ID '{road_id}' not found in active network."
+        )
+    return {
+        "message": f"Road {road_id} attributes updated successfully.",
+        "road": updated_edge
+    }
+
+@router.post("/dijkstra/network/reset")
+def reset_road_network(
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Resets the disaster road network to default baseline topology.
+    RBAC: Restricted to authorized Central Operators and Admins.
+    """
+    if current_user.role not in [UserRole.OPERATOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Only Central Logistics Operators can reset the emergency road network."
+        )
+    reset_graph = network_manager.reset_to_default()
+    return {
+        "message": "Disaster road network reset to default operational baseline.",
+        "network": reset_graph
+    }
 
 # Multi-center inventory allocation request schema
 class DemandInput(BaseModel):
