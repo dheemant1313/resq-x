@@ -41,6 +41,10 @@ test_resqx.db
 .env.local
 .env.*.local
 
+# Generated local credentials (never commit)
+center_credentials.local
+backend/center_credentials.local
+
 # Node / Frontend
 node_modules/
 frontend/node_modules/
