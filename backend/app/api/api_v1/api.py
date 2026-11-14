@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.api_v1.endpoints import auth, algorithms, health, requests, relief_centers, resources
+from app.api.api_v1.endpoints import auth, algorithms, health, requests, relief_centers, resources, notifications
 
 api_router = APIRouter()
 
@@ -9,3 +9,4 @@ api_router.include_router(relief_centers.router, prefix="/relief-centers", tags=
 api_router.include_router(resources.router, prefix="/resources", tags=["Relief Resource Inventory"])
 api_router.include_router(requests.router, prefix="/requests", tags=["Relief Requests & Triage"])
 api_router.include_router(algorithms.router, prefix="/algorithms", tags=["Core Optimization Algorithms"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["Alerts & Notifications"])

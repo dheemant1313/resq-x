@@ -43,7 +43,7 @@ class ResourceRequest(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    relief_center = relationship("ReliefCenter", back_populates="requests")
+    relief_center = relationship("ReliefCenter", back_populates="requests", lazy="joined")
     items = relationship("RequestItem", back_populates="request", cascade="all, delete-orphan", lazy="joined")
     allocations = relationship("AllocationLog", back_populates="request", cascade="all, delete-orphan")
     routes = relationship("DispatchRoute", back_populates="request")

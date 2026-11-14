@@ -4,6 +4,20 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from enum import Enum
+import bcrypt
+
+# Robust compatibility fix for bcrypt >= 4.0 with passlib
+# Modern bcrypt forbids passwords > 72 bytes and removed __about__, causing passlib's
+# legacy wrap bug detection to throw ValueError unless truncated to 72 bytes.
+_orig_hashpw = bcrypt.hashpw
+def _safe_hashpw(password, salt):
+    if isinstance(password, (bytes, bytearray)) and len(password) > 72:
+        password = password[:72]
+    elif isinstance(password, str) and len(password.encode('utf-8')) > 72:
+        password = password.encode('utf-8')[:72]
+    return _orig_hashpw(password, salt)
+bcrypt.hashpw = _safe_hashpw
+
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status

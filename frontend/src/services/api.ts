@@ -134,6 +134,19 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
   }
+
+  public static put<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  public static delete<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Health check endpoint

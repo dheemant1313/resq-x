@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SQLEnum, CheckConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SQLEnum, CheckConstraint, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -20,6 +20,7 @@ class ResourceItem(Base):
     name = Column(String(200), nullable=False)
     category = Column(SQLEnum(ResourceCategory), nullable=False)
     unit = Column(String(50), nullable=False, default="units")  # e.g., "carton", "box", "kg", "litre"
+    storage_location = Column(String(100), default="Central Warehouse Bay-A", nullable=False)
     
     # Critical fields for 0/1 Knapsack DP optimization:
     weight_per_unit_kg = Column(Float, nullable=False, default=1.0)
@@ -39,3 +40,21 @@ class ResourceItem(Base):
     )
 
     request_items = relationship("RequestItem", back_populates="resource")
+    transactions = relationship("InventoryTransaction", back_populates="resource", cascade="all, delete-orphan")
+
+
+class InventoryTransaction(Base):
+    __tablename__ = "inventory_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    resource_id = Column(Integer, ForeignKey("resource_inventory.id", ondelete="CASCADE"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    transaction_type = Column(String(50), nullable=False)  # RESTOCK, ALLOCATION_RESERVATION, DEALLOCATION, DISPATCH, ADJUSTMENT
+    quantity = Column(Integer, nullable=False)
+    previous_available = Column(Integer, nullable=False, default=0)
+    new_available = Column(Integer, nullable=False, default=0)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    resource = relationship("ResourceItem", back_populates="transactions")
+    operator = relationship("User")

@@ -84,6 +84,15 @@ export default function AuthenticatedSessionCard({
           <span>PROCEED TO NDRF RELIEF CENTER DASHBOARD</span>
           <ArrowRight size={15} />
         </button>
+      ) : (authData.role === 'OPERATOR' || authData.role === 'ADMIN') && onProceedToDashboard ? (
+        <button
+          onClick={() => onProceedToDashboard(authData)}
+          className="btn btn-amber w-full text-xs font-mono !py-3 flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(249,115,22,0.4)]"
+        >
+          <LayoutDashboard size={15} />
+          <span>PROCEED TO OPERATOR COMMAND CENTER</span>
+          <ArrowRight size={15} />
+        </button>
       ) : (
         <div className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-800/50 text-[11px] text-cyan-200 font-sans leading-relaxed">
           Logged in as <strong>{authData.role}</strong>. Proceed to central operations.

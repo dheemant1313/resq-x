@@ -11,11 +11,12 @@ import AboutSection from './components/AboutSection';
 import Footer from './components/Footer';
 import { LoginView } from './components/auth/LoginView';
 import NDRFDashboardLayout from './components/dashboard/ndrf/NDRFDashboardLayout';
+import OperatorDashboardLayout from './components/dashboard/operator/OperatorDashboardLayout';
 import { useLenis } from './hooks/useLenis';
 import { ApiClient } from './services/api';
 import type { AuthResponse } from './components/auth/types';
 
-type AppViewMode = 'landing' | 'login' | 'ndrf_dashboard';
+type AppViewMode = 'landing' | 'login' | 'ndrf_dashboard' | 'operator_dashboard';
 
 export function App() {
   // Initialize Lenis smooth scroll engine for landing page
@@ -53,6 +54,8 @@ export function App() {
   const handleLaunchLogin = () => {
     if (currentUser?.role === 'RELIEF_CENTER') {
       setViewMode('ndrf_dashboard');
+    } else if (currentUser?.role === 'OPERATOR' || currentUser?.role === 'ADMIN') {
+      setViewMode('operator_dashboard');
     } else {
       setViewMode('login');
     }
@@ -68,6 +71,8 @@ export function App() {
     setCurrentUser(authData);
     if (authData.role === 'RELIEF_CENTER') {
       setViewMode('ndrf_dashboard');
+    } else if (authData.role === 'OPERATOR' || authData.role === 'ADMIN') {
+      setViewMode('operator_dashboard');
     }
   };
 
@@ -80,6 +85,15 @@ export function App() {
 
   return (
     <>
+      {/* ----------------- VIEW 0: OPERATOR COMMAND CENTER ----------------- */}
+      {viewMode === 'operator_dashboard' && currentUser && (
+        <OperatorDashboardLayout
+          currentUser={currentUser}
+          onLogout={handleDashboardLogout}
+          onReturnToHome={handleReturnToLanding}
+        />
+      )}
+
       {/* ----------------- VIEW 1: NDRF / RELIEF CENTER DASHBOARD ----------------- */}
       {viewMode === 'ndrf_dashboard' && currentUser && (
         <NDRFDashboardLayout
