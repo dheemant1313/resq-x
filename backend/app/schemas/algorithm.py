@@ -110,9 +110,13 @@ class DijkstraResponse(BaseModel):
     path: List[str]
     path_coordinates: List[List[float]] = []  # [[lat, lng], [lat, lng], ...]
     path_details: List[Dict[str, Any]] = []
+    minimum_cost: float = 0.0  # Explicit global minimum cost computed by Dijkstra
+    cost_metric: str = "Weighted Hazard Units"  # "Weighted Hazard Units" or "Kilometers (km)"
     total_distance_km: float
     total_weighted_cost: float
     estimated_duration_minutes: float
+    estimated_fuel_liters: float = 0.0
+    estimated_operational_cost_inr: float = 0.0  # Estimated dispatch financial cost in INR
     algorithm: str = "Dijkstra Shortest Path with Min-Heap Priority Queue"
     execution_time_ms: float
     visited_nodes_count: int = 0

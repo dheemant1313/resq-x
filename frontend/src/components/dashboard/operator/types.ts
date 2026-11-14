@@ -335,6 +335,8 @@ export interface DijkstraPathDetailDTO {
   distance_km: number;
   condition_multiplier: number;
   risk_factor: number;
+  segment_cost?: number;
+  cumulative_cost?: number;
   estimated_speed_kmh: number;
   segment_time_mins: number;
   hazard_warning?: string;
@@ -347,9 +349,13 @@ export interface DijkstraResponseDTO {
   path: string[];
   path_coordinates: [number, number][];
   path_details: DijkstraPathDetailDTO[];
+  minimum_cost: number;
+  cost_metric?: string;
   total_distance_km: number;
   total_weighted_cost: number;
   estimated_duration_minutes: number;
+  estimated_fuel_liters?: number;
+  estimated_operational_cost_inr?: number;
   algorithm: string;
   execution_time_ms: number;
   visited_nodes_count: number;

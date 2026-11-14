@@ -802,6 +802,37 @@ export const OperatorRouteMapView: React.FC = () => {
                   })}
                 </MapContainer>
               )}
+
+              {/* Floating Map Tactical HUD: Dijkstra Minimum Cost Overlay */}
+              {routeResult && routeResult.is_reachable && (
+                <div className="absolute top-3 right-3 z-[1000] bg-slate-950/95 border-2 border-amber-500/70 rounded-xl p-3 shadow-2xl backdrop-blur-md pointer-events-auto max-w-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                      <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-amber-300">
+                        DIJKSTRA MINIMUM COST
+                      </span>
+                    </div>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      OPTIMAL
+                    </span>
+                  </div>
+                  <div className="mt-1 text-2xl font-black font-mono text-amber-200">
+                    {routeResult.minimum_cost ?? routeResult.total_weighted_cost}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      {routeResult.cost_metric || 'units'}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-3 text-[11px] font-mono text-slate-300 border-t border-slate-800 pt-1.5">
+                    <div>
+                      Distance: <span className="text-teal-400 font-bold">{routeResult.total_distance_km} km</span>
+                    </div>
+                    <div>
+                      Est: <span className="text-emerald-400 font-bold">₹{routeResult.estimated_operational_cost_inr?.toLocaleString() || '0'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Map Legend */}
@@ -866,9 +897,59 @@ export const OperatorRouteMapView: React.FC = () => {
             </div>
           )}
 
+          {/* Minimum Cost Summary Banner */}
+          {routeResult.is_reachable && (
+            <div className="p-4 bg-gradient-to-r from-amber-950/60 via-slate-900 to-teal-950/60 border border-amber-500/40 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      DIJKSTRA GLOBAL MINIMUM
+                    </span>
+                    <span className="text-xs text-slate-400">Optimal Path Verified</span>
+                  </div>
+                  <div className="text-lg font-bold font-mono text-amber-200 mt-0.5">
+                    Minimum Route Cost: <span className="text-amber-300 text-xl font-black">{routeResult.minimum_cost ?? routeResult.total_weighted_cost}</span> <span className="text-xs font-normal text-slate-400">({routeResult.cost_metric || 'units'})</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs font-mono text-slate-300 bg-slate-950/60 px-4 py-2 rounded-lg border border-slate-800">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">TOTAL DISTANCE</span>
+                  <span className="text-teal-300 font-bold text-sm">{routeResult.total_distance_km} km</span>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <span className="text-slate-500 block text-[10px]">EST. DISPATCH</span>
+                  <span className="text-emerald-300 font-bold text-sm">₹{routeResult.estimated_operational_cost_inr?.toLocaleString() || '0'}</span>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <span className="text-slate-500 block text-[10px]">FUEL CONSUMPTION</span>
+                  <span className="text-cyan-300 font-bold text-sm">{routeResult.estimated_fuel_liters || 0} L</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Solved Route KPI Grid */}
           {routeResult.is_reachable && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="bg-slate-900 border-2 border-amber-500/50 rounded-xl p-4 shadow-lg shadow-amber-950/30 relative overflow-hidden">
+                <div className="text-[11px] font-bold text-amber-400 flex items-center justify-between">
+                  <span>Minimum Route Cost</span>
+                  <Zap className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black font-mono text-amber-300 mt-1">
+                  {routeResult.minimum_cost ?? routeResult.total_weighted_cost}
+                </div>
+                <div className="text-[10px] text-amber-400/80 mt-0.5 font-mono">
+                  {routeResult.cost_metric || 'Weighted units'}
+                </div>
+              </div>
+
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
                 <div className="text-[11px] font-medium text-slate-400 flex items-center justify-between">
                   <span>Physical Distance</span>
@@ -882,17 +963,6 @@ export const OperatorRouteMapView: React.FC = () => {
 
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
                 <div className="text-[11px] font-medium text-slate-400 flex items-center justify-between">
-                  <span>Weighted Travel Cost</span>
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                </div>
-                <div className="text-xl font-bold font-mono text-amber-300 mt-1">
-                  {routeResult.total_weighted_cost} <span className="text-xs font-normal text-slate-400">units</span>
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Dijkstra minimized objective</div>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
-                <div className="text-[11px] font-medium text-slate-400 flex items-center justify-between">
                   <span>Est. Convoy Duration</span>
                   <Clock className="w-3.5 h-3.5 text-cyan-400" />
                 </div>
@@ -900,6 +970,19 @@ export const OperatorRouteMapView: React.FC = () => {
                   {routeResult.estimated_duration_minutes} <span className="text-xs font-normal text-slate-400">mins</span>
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Speed-adjusted travel time</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
+                <div className="text-[11px] font-medium text-slate-400 flex items-center justify-between">
+                  <span>Est. Fuel Cost</span>
+                  <span className="text-xs font-mono text-emerald-400">₹ INR</span>
+                </div>
+                <div className="text-xl font-bold font-mono text-emerald-300 mt-1">
+                  ₹{routeResult.estimated_operational_cost_inr ? routeResult.estimated_operational_cost_inr.toLocaleString() : '0'}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                  {routeResult.estimated_fuel_liters || 0} L diesel
+                </div>
               </div>
 
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow">
@@ -1038,6 +1121,8 @@ export const OperatorRouteMapView: React.FC = () => {
                         <th className="py-2.5 px-3">Distance (km)</th>
                         <th className="py-2.5 px-3">Condition Mult</th>
                         <th className="py-2.5 px-3">Risk Rating</th>
+                        <th className="py-2.5 px-3 text-amber-300">Segment Cost</th>
+                        <th className="py-2.5 px-3 text-amber-400">Cumulative Min-Cost</th>
                         <th className="py-2.5 px-3">Convoy Speed</th>
                         <th className="py-2.5 px-3">Est. Time</th>
                         <th className="py-2.5 px-3">Hazard Status</th>
@@ -1073,6 +1158,14 @@ export const OperatorRouteMapView: React.FC = () => {
                               {seg.risk_factor} / 5.0
                             </span>
                           </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
+                            {seg.segment_cost !== undefined ? seg.segment_cost : seg.distance_km}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-black text-amber-400">
+                            <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
+                              {seg.cumulative_cost !== undefined ? seg.cumulative_cost : '-'}
+                            </span>
+                          </td>
                           <td className="py-2.5 px-3 text-cyan-300">{seg.estimated_speed_kmh} km/h</td>
                           <td className="py-2.5 px-3 font-bold text-slate-200">{seg.segment_time_mins} min</td>
                           <td className="py-2.5 px-3 font-sans">
@@ -1091,6 +1184,30 @@ export const OperatorRouteMapView: React.FC = () => {
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot className="bg-slate-950 font-bold border-t-2 border-slate-700 text-slate-200 text-xs">
+                      <tr>
+                        <td colSpan={3} className="py-3 px-3 text-right uppercase tracking-wider text-slate-400">
+                          DIJKSTRA MINIMUM TOTALS:
+                        </td>
+                        <td className="py-3 px-3 text-teal-300 font-mono font-bold">
+                          {routeResult.total_distance_km} km
+                        </td>
+                        <td colSpan={2}></td>
+                        <td className="py-3 px-3 text-amber-300 font-mono font-bold">
+                          {routeResult.minimum_cost ?? routeResult.total_weighted_cost}
+                        </td>
+                        <td className="py-3 px-3 text-amber-300 font-mono font-black text-sm bg-amber-500/20 border border-amber-500/40">
+                          {routeResult.minimum_cost ?? routeResult.total_weighted_cost} <span className="text-[10px] font-normal text-slate-400">({routeResult.cost_metric || 'units'})</span>
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-400">Avg Convoy</td>
+                        <td className="py-3 px-3 font-mono text-cyan-300">
+                          {routeResult.estimated_duration_minutes} min
+                        </td>
+                        <td className="py-3 px-3 font-mono text-emerald-400 font-bold">
+                          Est: ₹{routeResult.estimated_operational_cost_inr ? routeResult.estimated_operational_cost_inr.toLocaleString() : '0'}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}

@@ -59,9 +59,13 @@ def solve_dijkstra_shortest_path(
             path=[start_node],
             path_coordinates=[[target_node.latitude, target_node.longitude]],
             path_details=[],
+            minimum_cost=0.0,
+            cost_metric="Kilometers (km)" if metric == "distance" else "Weighted Hazard Units",
             total_distance_km=0.0,
             total_weighted_cost=0.0,
             estimated_duration_minutes=0.0,
+            estimated_fuel_liters=0.0,
+            estimated_operational_cost_inr=0.0,
             execution_time_ms=round(elapsed_ms, 3),
             visited_nodes_count=1,
             hazard_warnings=[],
@@ -70,7 +74,7 @@ def solve_dijkstra_shortest_path(
                 "popped_node": start_node,
                 "current_cost": 0.0,
                 "action": "IDENTITY_MATCH",
-                "detail": f"Origin node '{start_node}' is identical to destination. Zero travel required."
+                "detail": f"Origin node '{start_node}' is identical to destination. Zero travel required (Minimum Cost = 0.0)."
             }]
         )
 
@@ -200,11 +204,16 @@ def solve_dijkstra_shortest_path(
 
         # Build turn-by-turn detailed corridor analysis
         total_time_mins = 0.0
+        running_cost = 0.0
         for edge_used, target_node_code in edges_reversed:
             source_node_code = edge_used.source if edge_used.target == target_node_code else edge_used.target
             speed = max(10.0, base_speed_kmh / edge_used.condition_multiplier)
             segment_time = (edge_used.distance_km / speed) * 60.0
             total_time_mins += segment_time
+
+            risk_mult = edge_used.risk_factor if (avoid_high_risk and edge_used.risk_factor > 1.0) else 1.0
+            seg_cost = float(edge_used.distance_km) if metric == "distance" else float(edge_used.distance_km * edge_used.condition_multiplier * risk_mult)
+            running_cost += seg_cost
 
             warning = None
             if edge_used.condition_multiplier > 1.3:
@@ -224,6 +233,8 @@ def solve_dijkstra_shortest_path(
                 "distance_km": round(edge_used.distance_km, 2),
                 "condition_multiplier": edge_used.condition_multiplier,
                 "risk_factor": edge_used.risk_factor,
+                "segment_cost": round(seg_cost, 2),
+                "cumulative_cost": round(running_cost, 2),
                 "estimated_speed_kmh": round(speed, 1),
                 "segment_time_mins": round(segment_time, 1),
                 "hazard_warning": warning
@@ -253,6 +264,13 @@ def solve_dijkstra_shortest_path(
             avoid_high_risk=avoid_high_risk
         )
 
+    # Calculate global minimum cost and economic operational estimates
+    min_cost = min_costs[end_node] if is_reachable else 0.0
+    total_dist = physical_distances[end_node] if is_reachable else 0.0
+    fuel_liters = round(total_dist / 3.5, 1) if is_reachable else 0.0
+    fuel_cost_inr = fuel_liters * 96.5
+    operational_cost_inr = round(fuel_cost_inr + (min_cost * 18.0), 2) if is_reachable else 0.0
+
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
     return DijkstraResponse(
@@ -262,9 +280,13 @@ def solve_dijkstra_shortest_path(
         path=path_codes,
         path_coordinates=path_coords,
         path_details=path_details,
-        total_distance_km=round(physical_distances[end_node], 2) if is_reachable else 0.0,
-        total_weighted_cost=round(min_costs[end_node], 2) if is_reachable else 0.0,
+        minimum_cost=round(min_cost, 2),
+        cost_metric="Kilometers (km)" if metric == "distance" else "Weighted Hazard Units",
+        total_distance_km=round(total_dist, 2),
+        total_weighted_cost=round(min_cost, 2),
         estimated_duration_minutes=round(total_time_mins, 1),
+        estimated_fuel_liters=fuel_liters,
+        estimated_operational_cost_inr=operational_cost_inr,
         execution_time_ms=round(elapsed_ms, 3),
         visited_nodes_count=len(visited),
         hazard_warnings=hazard_warnings,
